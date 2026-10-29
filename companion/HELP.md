@@ -1,83 +1,61 @@
-## VARIABLES
+## SETUP
 
-    * Implemented
-        -   outputs ( available destinations )
-        -   inputs ( available sources )
-        -   level ( router crosspoint level )
-        -   id ( router unit ID )
-        -   dst## ( the ascii name assigned to each available destination )
-        -   src## ( the ascii name assigned to each available source )
-        -   selected_dst_name ( for bank labelling and feedback )
-        -   selected_dst_id ( used for actions requiring hex id of port of destination )
-        -   selected_src_name ( for bank labelling and feedback )
-        -   selected_src_id ( used for actions requiring hex id of port of destination )
-        -   video_format ( format of video processed by router )
-        -   video_reference ( auto | blackburst | tri-level )
-        -   switching_point ( field | odd | even )
+In the router's web interface (System Settings > Router System Settings > Port Settings):
 
+- In the TCP/IP section set "Default Function" to "Crosspoint remote control 2"
+- In the Command Response section make sure that Echo, C and S responses are checked
+- Send changes in order to save them to the system
+
+The module waits for the router to echo each command before sending the next, as the router requires. Echo must be enabled; if it is not, commands are paced by a 500ms timeout and startup is slow.
+
+## HOW IT WORKS
+
+Select a destination, then a source, then press a cut or preset button. The module learns the router's size, port names, crosspoints and destination locks on connect and keeps them current from the router's S and W responses.
+
+The router's lowest level that responds to a system size request is the one controlled.
+
+## VARIABLES
+
+- `id` router unit ID (from the active CPU)
+- `level` crosspoint level in use
+- `outputs`, `inputs` number of destinations and sources
+- `dst##` name of each destination
+- `src##` name of each source
+- `xpt##` hex id of the source routed to each destination
+- `dst##_locked` lock mode of each destination (0 unlocked, 1 locked, 2 locked by others)
+- `selected_dst_id`, `selected_dst_name` the selected destination
+- `selected_dst_src_id`, `selected_dst_src_name` the source routed to the selected destination
+- `selected_src_id`, `selected_src_name` the selected source
+- `active_selected_id`, `active_selected_name`, `active_selected_type` the most recent selection (`src` or `dst`)
+
+Selection variables are empty when nothing is selected, and are cleared after a cut.
 
 ## ACTIONS
 
-    * Implemented
-        >   Router config
-            -   Preset video format
-            -   Apply preset video format
-            -   Cancel preset video format
-            -   rename a dst or src. Needs to account for updating 'selected' variable values if renamed item matches selections
-        >   Switching operation
-            -   Set destination
-            -   Set source
-            -   Switch crosspoint
-            -   Preset crosspoint
-            -   Switch preset crosspoint(s)
-            -   lock / unlock dst
-    * ToDo (?)
-        >   Switching operation
-            -   reinitialize unit ( advise caution )
+- Set destination / Set source: make a selection
+- Cut selected source to selected destination
+- Preset selected source to selected destination
+- Switch preset crosspoint(s): perform all preset crosspoints together
+- Preset / Apply / Cancel video format (with reference and switching point)
+- Rename a destination or source
+- Lock / unlock a destination
 
+Operator actions are sent ahead of the module's own startup reads, but never interrupt a command already waiting for its echo.
 
 ## FEEDBACKS
 
-    * Implemented
-        - Routed destination ( true if selected source is routed to this destination xpt - blinbks if selected destination is not routed to selected source)
-        - Selected destination ( true if this destination is currently selected/pressed)
-        - Locked destination ( true if this destination is locked )
-        - Routed source ( true if this source is routed to the selected destination xpt )
-        - Selected source ( true if this source is currently selected/pressed)
-                       
-    * ToDo
-        - general improvements - not particularly happy with certain behaviours but it's good enough for now 
+- Selected destination / Selected source: this port is selected. The destination blinks while a source is also selected.
+- Routed source: this source is routed to the selected destination
+- Routed destination: this destination carries the selected source
+- Locked destination: this destination is locked
 
 ## PRESETS
 
-    * Implemented
-        > Control
-            - Cut selected src to selected dst (shows selection values)
-            - Preset xpt with selected src and dst (shows selection values)
-            - Cut all preset xpts
-            - Preset video format
-            - Apply preset video format
-            - Cancel preset video format
-            - Rename destination
-            - Rename source
-            - Lock / unlock destination
-        > Destinations
-            - Preset for each available destination with the following properties;
-                > Actions
-                    - select destination
-                > Feedbacks
-                    - Routed destination ( true if selected source is routed to this destination xpt - blinbks if selected destination is not routed to selected source)
-                    - Selected destination ( true if this destination is currently selected/pressed)
-                    - Locked destination ( true if this destination is locked )
-        > Source
-             - Preset for each available source with the following properties;
-                > Actions
-                    - select source
-                > Feedbacks
-                    - Routed source ( true if this source is routed to the selected destination xpt )
-                    - Selected source ( true if this source is currently selected/pressed)
-    * ToDo
+- Control: cut, preset, salvo switch, video format, rename and lock buttons
+- Destinations: a button per destination with select, routed, selected and locked feedback
+- Sources: a button per source with select, routed and selected feedback
 
+Not implemented: reinitialize unit, reading back the video format, "lock others" mode.
 
 ## COMMAND REFERENCE
 

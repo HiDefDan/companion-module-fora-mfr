@@ -1,6 +1,9 @@
 node_modules/
 package-lock.json
 /pkg
-/pkg.tgz
+/*.tgz
+/dist
+DEBUG-*
 .DS_Store
-DEBUG-PACKAGED
+/.yarn
+/.vscode

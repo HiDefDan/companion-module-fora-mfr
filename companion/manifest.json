@@ -1,9 +1,11 @@
 {
+	"$schema": "../node_modules/@companion-module/base/assets/manifest.schema.json",
+	"type": "connection",
 	"id": "fora-mfr",
 	"name": "fora-mfr",
 	"shortname": "fora-mfr",
 	"description": "Control ForA MFR routers",
-	"version": "1.0.2",
+	"version": "2.0.0",
 	"license": "MIT",
 	"repository": "git+https://github.com/bitfocus/companion-module-fora-mfr.git",
 	"bugs": "https://github.com/bitfocus/companion-module-fora-mfr/issues",
@@ -14,13 +16,13 @@
 		}
 	],
 	"runtime": {
-		"type": "node18",
+		"type": "node22",
 		"api": "nodejs-ipc",
 		"apiVersion": "0.0.0",
-		"entrypoint": "../src/main.js"
+		"entrypoint": "../dist/main.js"
 	},
 	"legacyIds": [],
 	"manufacturer": "For.A",
 	"products": ["MFR"],
-	"keywords": ["Switcher, Router, Matrix"]
+	"keywords": ["Switcher", "Router", "Matrix"]
 }
