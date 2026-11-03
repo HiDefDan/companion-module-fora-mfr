@@ -6,13 +6,27 @@ In the router's web interface (System Settings > Router System Settings > Port S
 - In the Command Response section make sure that Echo, C and S responses are checked
 - Send changes in order to save them to the system
 
-The module waits for the router to echo each command before sending the next, as the router requires. Echo must be enabled; if it is not, commands are paced by a 500ms timeout and startup is slow.
+The module sends one command at a time and waits for the router's prompt before sending the next, as the router requires. If no prompt arrives it moves on after 1 second, or 5 seconds for commands with long replies.
 
 ## HOW IT WORKS
 
-Select a destination, then a source, then press a cut or preset button. The module learns the router's size, port names, crosspoints and destination locks on connect and keeps them current from the router's S and W responses.
+Select a destination and a source, in either order, then press a cut or preset button. The pair stays selected until you cut.
+
+To build a salvo (a soft macro) of several routes: select a source, then a destination, and press PRESET; the pair stays on show, and each further destination you press and PRESET is added with the same source. Pressing a source starts a new pair. Set "When a destination and a source are both selected" to "Stage a preset straight away" in the connection settings to drop the PRESET press entirely. Destinations showing a staged route show the staged source on their own line and turn orange. Press the salvo switch button to take them all at once, or clear presets to discard them. The module learns the router's size, port names, crosspoints, staged presets and destination locks on connect, and re-reads the crosspoints and presets every few seconds (see the refresh setting) so route changes made elsewhere show up. A cut to a locked destination is refused: the module logs a warning and keeps the selection and any staged route. Staged routes belong to the connection that made them: routes staged from a panel or another client are not visible to this module, and it can only take or clear its own.
 
 The router's lowest level that responds to a system size request is the one controlled.
+
+## RECORDING A MACRO
+
+The module supports Companion's action recording. On a button, use the learn (record) option on the action list, then press your source and destination buttons and the salvo switch as you normally would. Each staged or cut route is added as a "Preset a route" or "Cut a route" action, and the salvo switch as "Switch preset crosspoint(s)". Staging the same destination again replaces its earlier action. Stop recording and the button now repeats that salvo in one press.
+
+Companion's own recording controls are internal actions, which module presets cannot contain, so set up three buttons on a page (the blank module-style preset makes a good macro button):
+
+- A record toggle with the internal actions "Action recorder: set connections" (this connection) then "Action recorder: set recording" (toggle), and the internal "Action recorder: check connections" feedback in state "recording" to light it while recording.
+- A button with the internal action "Action recorder: save to button", pointing at the macro button to record onto, to save what was recorded.
+- The macro button itself.
+
+Add the salvo switch button press before you stop recording if you want the macro to take the routes as well as stage them.
 
 ## VARIABLES
 
@@ -22,10 +36,14 @@ The router's lowest level that responds to a system size request is the one cont
 - `dst##` name of each destination
 - `src##` name of each source
 - `xpt##` hex id of the source routed to each destination
+- `xpt##_name` name of the source routed to each destination
 - `dst##_locked` lock mode of each destination (0 unlocked, 1 locked, 2 locked by others)
 - `selected_dst_id`, `selected_dst_name` the selected destination
 - `selected_dst_src_id`, `selected_dst_src_name` the source routed to the selected destination
 - `selected_src_id`, `selected_src_name` the selected source
+- `selected_dst_label`, `selected_src_label` the selected names, or `DST` / `SRC` while nothing is selected (used by the cut and preset buttons)
+- `selected_dst_preset_src_id`, `selected_dst_preset_src_name` the source staged by a preset for the selected destination
+- `selected_dst_lock_action`, `selected_dst_lock_text` what pressing the lock button will do (LOCK or UNLOCK) and ready made button text
 - `active_selected_id`, `active_selected_name`, `active_selected_type` the most recent selection (`src` or `dst`)
 
 Selection variables are empty when nothing is selected, and are cleared after a cut.
@@ -36,23 +54,27 @@ Selection variables are empty when nothing is selected, and are cleared after a 
 - Cut selected source to selected destination
 - Preset selected source to selected destination
 - Switch preset crosspoint(s): perform all preset crosspoints together
-- Preset / Apply / Cancel video format (with reference and switching point)
+- Preset a route / Cut a route: stage or cut one explicit source to destination pair, without using the selection
+- Clear preset crosspoint(s): discard all staged presets
+- Preset video format (format, reference and switching point, each of which can be "Use the connection default" set in the connection settings), optionally applied straight away; Apply and Cancel preset video format. These are actions only, with no preset buttons: the router restarts when a new format is accepted and cannot report its current format, so there is no feedback and a stray press is costly.
 - Rename a destination or source
-- Lock / unlock a destination
+- Lock / unlock a destination, or toggle the lock of the selected destination
 
-Operator actions are sent ahead of the module's own startup reads, but never interrupt a command already waiting for its echo.
+Operator actions are sent ahead of the module's own startup reads, but never interrupt a command already waiting for its prompt.
 
 ## FEEDBACKS
 
-- Selected destination / Selected source: this port is selected. The destination blinks while a source is also selected.
+- Selected destination / Selected source: this port is selected
 - Routed source: this source is routed to the selected destination
 - Routed destination: this destination carries the selected source
+- Preset destination / Preset source: a preset is staged for this destination, or this source is staged for the selected destination
 - Locked destination: this destination is locked
 
 ## PRESETS
 
-- Control: cut, preset, salvo switch, video format, rename and lock buttons
-- Destinations: a button per destination with select, routed, selected and locked feedback
+- Control: a blank button in the module style, cut, preset, salvo switch, clear presets, lock toggle and rename buttons
+- Destinations: a button per destination with select, routed, selected, preset and locked feedback
+- Destinations showing their routed source: a button per destination whose text shows the source currently routed to it, updated live, with a staged route shown beneath it
 - Sources: a button per source with select, routed and selected feedback
 
 Not implemented: reinitialize unit, reading back the video format, "lock others" mode.
@@ -64,7 +86,7 @@ Not implemented: reinitialize unit, reading back the video format, "lock others"
      * Basic specification
          -   Port number 49152 - 65534 (default : 23)
          -   Maximum clients : 16
-         -   Wait for Echo before sending next command
+         -   Wait for the prompt, and all reply messages, before sending next command
          -   No password required
 
 ## Commands available by connecting using LAN
@@ -164,7 +186,7 @@ If "Crosspoint remote control 2" is not enabled some functionality is not availa
 
         - Control command   =>  @[sp]A?
         - Command response
-            If CPU is active:   <=  @[sp]A:<ID>
+            If CPU is active:   <=  A:<ID>
             If CPU is passive:  <= (no response)
 
 9.  Commands (W?) for requesting Destination Lock status.

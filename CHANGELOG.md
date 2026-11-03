@@ -1,23 +1,92 @@
 # Changelog
 
-## v2.0.0
+All notable changes to this module are documented here. The format follows
+[Keep a Changelog](https://keepachangelog.com/en/1.1.0/), the version numbers follow
+[Semantic Versioning](https://semver.org/spec/v2.0.0.html), and entries are grouped by the
+[Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/) type of the change.
 
-Rewritten in TypeScript for Companion 5 (`@companion-module/base` 2.x, Node 22). Action, feedback, option, config and variable ids are unchanged, so existing buttons keep working.
+## [2.0.0] - Unreleased
 
-- Commands are now sent one at a time, waiting for the router's echo as its protocol requires. Operator actions go ahead of startup reads.
-- Incoming data is framed per line across packets; the receive buffer is no longer shared between instances or kept across reconnects.
-- Responses are parsed by a single typed parser instead of substring checks, with unit tests.
-- Port names and sizes now rebuild dropdowns, variables and presets once per batch rather than on every received line. Duplicate variable definitions are gone.
-- Dropdowns list every port as soon as the router's size is known, labelled `n: name`.
-- Lock status is requested once the router size is known (on a first connection it was requested before the size was known, so no locks were read).
-- The crosspoint lookup used when selecting a destination no longer has an off by one.
-- Selecting a port outside the router's size, cutting without both ends selected, or locking before the unit ID is known now logs a warning instead of sending a malformed command.
-- The selection blink timer only runs while a source and destination are both selected, and is cleaned up on destroy.
-- The default rename text is `New name` (it was an object), and the lock feedback treats any non-zero lock mode as locked.
+A rewrite in TypeScript for Companion 5. Existing connections, and the actions, feedbacks and variables on
+buttons already placed, keep working: their ids and option names are unchanged, so no upgrade script is needed.
 
-## v1.0.2 - 2025-01-12
+### ⚠ BREAKING CHANGES
+
+- Requires Companion 5 (module API `@companion-module/base` 2.x) and Node 22.20 or newer. It no longer loads in Companion 3 or 4. Stay on 1.0.x for those.
+- Selecting a destination no longer clears the selected source, and the selection no longer blinks. A destination and a source can be selected in either order and both stay highlighted until the next cut or salvo, so buttons that relied on the old blink need no change but will look steady.
+- The host is no longer pre-filled with a default address.
+- Presets are rebuilt under new ids with a new look (layered buttons with the same plain text version as a fallback). Buttons already placed from v1 presets are unaffected, because Companion copies a preset when it is placed.
+- The three video format presets are gone. See "Removed" below.
+
+### Features
+
+- **feat(routing):** staged presets (`P:`) are read back from the router (`V?`). New **Preset destination** and **Preset source** feedbacks, the `selected_dst_preset_src_id` / `_name` variables, and the `xpt##_pending_name` variable show what is staged before it is taken.
+- **feat(routing):** new **Clear preset crosspoint(s)** action (`B:C`) to discard staged routes.
+- **feat(routing):** new **Preset a route** and **Cut a route** actions that take an explicit destination and source instead of using the selection.
+- **feat(routing):** new connection setting "When a destination and a source are both selected": wait for the button (default), cut straight away, or stage a preset straight away. Staging keeps the pair on show, so a salvo is built by picking a source and tapping destinations, then taken with **Switch preset crosspoint(s)**. Cutting a destination removes it from the staged routes, so a later take cannot undo the cut. A cut to a locked destination logs a warning and keeps the selection and staged route.
+- **feat(recording):** supports Companion's action recording. Stage or cut routes while recording and they are captured as **Preset a route** / **Cut a route** actions, ready to replay from one button.
+- **feat(routing):** routes and staged presets are re-read from the router every 5 seconds (connection setting, 0 turns it off) and straight after each routing command, so route changes made from the web UI or a panel appear on buttons. Staged routes are per connection on the router, so only this module's own are shown.
+- **feat(lock):** the lock action can toggle lock / unlock and can act on the selected destination. The lock preset shows `LOCK` or `UNLOCK` with the destination name, driven by the new `selected_dst_lock_action` and `selected_dst_lock_text` variables.
+- **feat(video):** the default video format, reference and switching point are set in the connection settings and shown by the `video_format_default` variable. The **Preset video format** action can use them ("Use the connection default") and can apply straight away. The module never changes the router's format by itself.
+- **feat(presets):** presets use Companion 5 layered buttons with a plain text fallback: a blank button in the module style, destination and source buttons, cut and preset buttons laid out as source / `v` / destination, and a destination button that shows its routed source and, only while a route is staged, the staged source.
+- **feat(variables):** new `xpt##_name` (routed source name per destination), `selected_src_label` and `selected_dst_label` (names, or `SRC` / `DST` while nothing is selected).
+
+### Bug Fixes
+
+- **fix(protocol):** commands are sent one at a time and wait for the router's prompt, and so for all of a long reply, as its protocol requires. If no prompt arrives the module moves on after the manual's timeouts: 1 second, or 5 seconds for commands with long replies. Operator actions go ahead of the startup reads. v1 did not wait and could overrun the router.
+- **fix(protocol):** the video format replies (`UF!`, `UR!`) are logged, and `UR!E` is a warning that the router rejected the change.
+- **fix(protocol):** names sent to the router are upper case hex of UTF-8, at most 128 bytes, as the manual specifies. The system size request uses the manual's `@ F?<Lvl>` form.
+- **fix(protocol):** incoming data is framed per line across packets. The receive buffer was shared between instances, started with 32 NUL bytes and survived reconnects; it is now per connection and reset on connect.
+- **fix(protocol):** responses are parsed by one typed parser instead of substring checks, and a router that replies on the same line as the echo is handled.
+- **fix(lock):** lock status was requested before the router size was known on a first connection, so no locks were read. It is now requested once the size is known.
+- **fix(select):** the crosspoint lookup used when selecting a destination had an off-by-one.
+- **fix(select):** choosing a port outside the router's size, cutting without both ends selected, or locking before the unit ID is known now logs a warning instead of sending a malformed command or throwing.
+- **fix(actions):** the default text for the rename actions is `New name` (it was an object), and the lock feedback treats any non-zero lock mode as locked.
+- **fix(ui):** the periodic refresh no longer makes buttons flash. Unchanged routes, locks and staged presets are ignored, and the staged list is replaced once, when the reply is complete.
+- **fix(lifecycle):** timers are cleared on destroy and on a new connection. v1's blink timer leaked; the blink is gone.
+
+### Performance Improvements
+
+- **perf(definitions):** port names and sizes now rebuild dropdowns, variables and presets once per batch (debounced) instead of on every received line, and presets are no longer rebuilt from a file read each time. Duplicate variable definitions are gone.
+- **perf(ui):** dropdowns list every port as soon as the router's size is known, labelled `n: name`.
+
+### Refactoring
+
+- **refactor:** rewritten in TypeScript on `@companion-module/base` 2.x, split into `protocol`, `queue`, `state`, `actions`, `feedbacks`, `variables` and `presets` modules around a thin `main.ts`. The button image is embedded in the code.
+- **refactor(build):** Yarn 4, `@companion-module/tools` 3.x, ESLint 10, Prettier, TypeScript 6.
+
+### Tests
+
+- **test:** unit tests for the protocol parser, the command queue, the router state, the presets, and the module against a simulated router using the framing captured from a real MFR (no router needed).
+
+### Documentation
+
+- **docs:** `HELP.md` rewritten: setup, how selection and salvos work, recording a macro, variables, actions, feedbacks and presets. `README.md` describes development and the source layout.
+
+### Removed
+
+- **Video format presets** (preset, apply and cancel). The router restarts when a new format is accepted and cannot report its current format, so a button could not show or confirm anything and a stray press is costly. The Preset, Apply and Cancel video format **actions** remain.
+- The `src/main.js` single-file implementation, `build-config.cjs` and `.prettierrc`.
+
+### Not yet supported
+
+- "Lock others" mode (needs a multi-router system), re-initialising a unit (`Z:`), and reading back the video format (the router cannot report it).
+- Only the lowest crosspoint level that answers is controlled.
+
+## [1.0.2] - 2025-01-12
+
+### Bug Fixes
 
 - Improved decoding of source and destination names from the hex values returned by the MFR. This fixes the module for Companion 3.4.x.
-- Moved the button image to an images/ directory.
+
+### Documentation
+
 - Updated the label text for "Preset Crosspoint" and "Switch Crosspoint" actions for clarity.
+
+### Chores
+
+- Moved the button image to an `images/` directory.
 - Upgraded module-base and module-tools.
+
+[2.0.0]: https://github.com/bitfocus/companion-module-fora-mfr/compare/v1.0.2...v2.0.0
+[1.0.2]: https://github.com/bitfocus/companion-module-fora-mfr/releases/tag/v1.0.2
