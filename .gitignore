@@ -7,3 +7,7 @@ DEBUG-*
 .DS_Store
 /.yarn
 /.vscode
+
+# Local reference material and Companion page exports (hold router addresses)
+/docs/*.pdf
+*.companionconfig
