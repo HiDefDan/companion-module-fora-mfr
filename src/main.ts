@@ -14,6 +14,7 @@ import {
 	Cmd,
 	LineBuffer,
 	commandTimeoutMs,
+	fitName,
 	NAMES_PER_BLOCK,
 	parseHex,
 	parseLine,
@@ -60,7 +61,11 @@ export default class ModuleInstance extends InstanceBase<ModuleSchema> {
 	readonly #lines = new LineBuffer()
 	readonly #queue = new CommandQueue((command) => this.#write(command), commandTimeoutMs)
 	#awaitingSize = true
+	/** Names just sent to the router, to compare with what it reports back */
+	readonly #renames = new Map<string, string>()
 	#recording = false
+	/** Counts what has been recorded, so only a repeat within one salvo replaces an earlier action */
+	#recordStep = 0
 	/** Staged routes collected from the reply to the V? in progress */
 	#presetSweep: Map<number, number> | undefined
 	#pollTimer: ReturnType<typeof setInterval> | undefined
@@ -193,6 +198,7 @@ export default class ModuleInstance extends InstanceBase<ModuleSchema> {
 		this.#send(Cmd.cutPresets())
 		this.#record('switchPresetXpts')
 		this.state.presets.clear()
+		this.#presetsChanged()
 		this.#refreshRoutes()
 		this.state.clearSelection()
 		this.#selectionChanged()
@@ -200,6 +206,7 @@ export default class ModuleInstance extends InstanceBase<ModuleSchema> {
 
 	clearPresets(): void {
 		this.#send(Cmd.clearPresets())
+		this.#record('clearPresetXpts')
 		this.state.presets.clear()
 		this.#presetsChanged()
 		this.#refreshRoutes()
@@ -248,9 +255,11 @@ export default class ModuleInstance extends InstanceBase<ModuleSchema> {
 			this.log('warn', 'Cannot rename to an empty name')
 			return
 		}
-		this.#send(Cmd.rename(kind, index, trimmed))
-		// don't wait for the router to confirm
-		if (this.state.setName(kind, index, trimmed)) this.#nameChanged(kind, index)
+		// the router may shorten a name or drop characters, so show what it reports back
+		const fitted = fitName(trimmed).trim()
+		this.#renames.set(`${kind}${index}`, fitted)
+		this.#send(Cmd.rename(kind, index, fitted))
+		this.#send(Cmd.names(kind, index))
 	}
 
 	lockDestination(value: string, mode: string, useSelected = false): void {
@@ -380,7 +389,7 @@ export default class ModuleInstance extends InstanceBase<ModuleSchema> {
 		const seconds = Number(this.config.pollInterval ?? 5)
 		if (!(seconds > 0)) return
 		this.#pollTimer = setInterval(() => {
-			if (this.#queue.idle) this.#refreshRoutes()
+			if (this.#queue.idle && this.#socket?.isConnected) this.#refreshRoutes()
 		}, seconds * 1000)
 	}
 
@@ -453,17 +462,19 @@ export default class ModuleInstance extends InstanceBase<ModuleSchema> {
 
 			case 'preset': {
 				if (message.level !== state.level || message.dst >= state.dstCount) break
-				if (this.#presetSweep) this.#presetSweep.set(message.dst, message.src)
-				else if (state.presets.get(message.dst) !== message.src) {
-					state.presets.set(message.dst, message.src)
-					this.#presetsChanged()
-				}
+				this.#presetSweep?.set(message.dst, message.src)
 				break
 			}
 
 			case 'name': {
 				const count = message.kind === 'dst' ? state.dstCount : state.srcCount
 				if (message.index >= count) break
+				const renamed = `${message.kind}${message.index}`
+				const sent = this.#renames.get(renamed)
+				if (sent !== undefined) {
+					this.#renames.delete(renamed)
+					if (sent !== message.name) this.log('warn', `The router stored "${sent}" as "${message.name}"`)
+				}
 				if (state.setName(message.kind, message.index, message.name)) this.#nameChanged(message.kind, message.index)
 				break
 			}
@@ -504,10 +515,14 @@ export default class ModuleInstance extends InstanceBase<ModuleSchema> {
 	/** While Companion is recording, what the operator does becomes actions they can put on a button */
 	#record(actionId: string, dst?: number, src?: number): void {
 		if (!this.#recording) return
-		if (dst === undefined || src === undefined) {
-			this.recordAction({ actionId, options: {} }, actionId)
+		const options = dst === undefined || src === undefined ? {} : { dst: toHex(dst), src: toHex(src) }
+		// Companion replaces a recorded action with the same id in place, which only suits staging a
+		// destination again before the salvo is taken. Anything else is a new step, kept in order.
+		if (actionId === 'presetRoute') {
+			this.recordAction({ actionId, options }, `${actionId}-${this.#recordStep}-${options.dst}`)
 		} else {
-			this.recordAction({ actionId, options: { dst: toHex(dst), src: toHex(src) } }, `${actionId}-${toHex(dst)}`)
+			this.#recordStep++
+			this.recordAction({ actionId, options }, `${actionId}-${this.#recordStep}`)
 		}
 	}
 
@@ -516,6 +531,8 @@ export default class ModuleInstance extends InstanceBase<ModuleSchema> {
 	}
 
 	#presetsChanged(): void {
+		// a V? already in flight can't include this change; the refresh that follows every change will
+		this.#presetSweep = undefined
 		this.setVariableValues({ ...selectionValues(this.state), ...routedNameValues(this.state) })
 		this.checkFeedbacks('PresetSource', 'PresetDestination')
 	}

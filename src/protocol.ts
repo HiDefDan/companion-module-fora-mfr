@@ -37,12 +37,24 @@ export function parseHex(value: unknown): number | undefined {
 }
 
 export function decodeName(hex: string): string {
-	return Buffer.from(hex, 'hex').toString('latin1').replace(/\0/g, '').trim()
+	return Buffer.from(hex, 'hex').toString('utf8').replace(/\0/g, '').trim()
 }
 
-/** Names are imported as upper case hex of UTF-8 bytes, at most 128 of them */
+/** Names are imported as upper case hex of UTF-8 bytes */
 export function encodeName(name: string): string {
-	return Buffer.from(name, 'utf8').subarray(0, MAX_NAME_BYTES).toString('hex').toUpperCase()
+	return Buffer.from(name, 'utf8').toString('hex').toUpperCase()
+}
+
+/** The longest start of `name` the router accepts, without cutting a character in half */
+export function fitName(name: string): string {
+	let fitted = ''
+	let bytes = 0
+	for (const char of name) {
+		bytes += Buffer.byteLength(char, 'utf8')
+		if (bytes > MAX_NAME_BYTES) break
+		fitted += char
+	}
+	return fitted
 }
 
 // First recognisable response token on a line. Names are hex, so these can't appear inside the data.

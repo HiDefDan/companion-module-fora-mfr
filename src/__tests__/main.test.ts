@@ -363,6 +363,87 @@ describe('ModuleInstance against a simulated router', () => {
 		expect(record).toHaveBeenCalledTimes(3)
 	})
 
+	it('keeps every salvo in a recording, and only replaces a repeat within one salvo', () => {
+		startUp()
+		module.config.autoRoute = 'preset'
+		module.handleStartStopRecordActions(true)
+		module.selectSource('05')
+		module.selectDestination('01')
+		module.selectSource('06')
+		module.selectDestination('01') // same destination, same salvo
+		module.cutPresets()
+		module.selectSource('05')
+		module.selectDestination('01') // same destination, next salvo
+		module.cutPresets()
+		module.selectSource('05')
+		module.selectDestination('02')
+		module.clearPresets()
+		const record = module.recordAction as unknown as ReturnType<typeof vi.fn>
+		const ids = record.mock.calls.map(([, id]) => id as string)
+		expect(ids[0]).toBe(ids[1])
+		expect(new Set(ids.slice(1)).size).toBe(ids.length - 1)
+		expect(record.mock.calls.at(-1)![0]).toEqual({ actionId: 'clearPresetXpts', options: {} })
+	})
+
+	it('does not let a V? already in flight undo a route staged while it waits', () => {
+		startUp()
+		reply(socket, '@ S?0')
+		expect(socket.sent.at(-1)).toBe('@ V?0\r')
+		module.routeExplicit('preset', '01', '05')
+		reply(socket, '@ V?0', 'V:02,06')
+		expect([...module.state.presets]).toEqual([[1, 5]])
+		expect(socket.sent.at(-1)).toBe('@ P:0/01,05\r')
+	})
+
+	it('refreshes the staged display after a take, even if no route changes', () => {
+		startUp()
+		module.routeExplicit('preset', '01', '05')
+		const setVars = module.setVariableValues as unknown as ReturnType<typeof vi.fn>
+		const check = module.checkFeedbacks as unknown as ReturnType<typeof vi.fn>
+		setVars.mockClear()
+		check.mockClear()
+		module.cutPresets()
+		expect(setVars).toHaveBeenCalledWith(expect.objectContaining({ xpt02_pending_name: '' }))
+		expect(check).toHaveBeenCalledWith('PresetSource', 'PresetDestination')
+	})
+
+	it('does not poll or log while the connection is down', () => {
+		startUp()
+		for (let i = 0; i < 20; i++) {
+			const next = socket.sent.at(-1)!.trim()
+			reply(socket, next)
+			if (next === '@ W?0,03') break
+		}
+		socket.isConnected = false
+		const before = socket.sent.length
+		;(module.log as unknown as ReturnType<typeof vi.fn>).mockClear()
+		vi.advanceTimersByTime(20000)
+		expect(socket.sent.length).toBe(before)
+		expect(module.log).not.toHaveBeenCalled()
+	})
+
+	it('shows the name the router reports after a rename, warning if it differs', () => {
+		startUp()
+		reply(socket, '@ S?0')
+		module.rename('dst', '01', 'A very long studio name')
+		expect(module.state.dstNames.has(1)).toBe(false)
+		reply(socket, '@ V?0')
+		expect(socket.sent.at(-1)).toBe(`@ K:DA001,${hex('A very long studio name')}\r`)
+		reply(socket, socket.sent.at(-1)!.trim())
+		expect(socket.sent.at(-1)).toBe('@ K?DA,001\r')
+		reply(socket, '@ K?DA,001', `K:DA001,${hex('A very long stud')}`, `K:DA002,${hex('OTHER')}`)
+		expect(module.state.dstName(1)).toBe('A very long stud')
+		expect(module.log).toHaveBeenCalledWith('warn', expect.stringContaining('stored'))
+	})
+
+	it('does not warn when the router keeps the name as sent', () => {
+		startUp()
+		module.rename('src', '02', 'CAM2')
+		socket.receive(`K:SA002,${hex('CAM2')}\r\n`)
+		expect(module.state.srcName(2)).toBe('CAM2')
+		expect(module.log).not.toHaveBeenCalledWith('warn', expect.anything())
+	})
+
 	it('stages and cuts explicit routes without touching the selection', () => {
 		startUp()
 		module.selectSource('01')

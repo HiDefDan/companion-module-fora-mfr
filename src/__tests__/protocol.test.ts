@@ -7,6 +7,7 @@ import {
 	commandTimeoutMs,
 	decodeName,
 	encodeName,
+	fitName,
 	parseHex,
 	parseLine,
 	toHex,
@@ -34,7 +35,19 @@ describe('hex helpers', () => {
 		expect(decodeName('43414D310000')).toBe('CAM1')
 		expect(decodeName(encodeName('Studio A'))).toBe('Studio A')
 		expect(encodeName('SRC 1')).toBe('5352432031')
-		expect(encodeName('x'.repeat(200))).toHaveLength(256)
+	})
+
+	it('round trips non-ASCII names', () => {
+		expect(decodeName(encodeName('Kamera Süd'))).toBe('Kamera Süd')
+		expect(decodeName(encodeName('スタジオ'))).toBe('スタジオ')
+	})
+
+	it('fits a name to the 128 bytes the router accepts, keeping whole characters', () => {
+		expect(fitName('short')).toBe('short')
+		expect(fitName('x'.repeat(200))).toBe('x'.repeat(128))
+		const fitted = fitName('ス'.repeat(50))
+		expect(fitted).toBe('ス'.repeat(42))
+		expect(decodeName(encodeName(fitted))).toBe(fitted)
 	})
 })
 

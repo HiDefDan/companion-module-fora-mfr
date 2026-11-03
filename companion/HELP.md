@@ -18,7 +18,7 @@ The router's lowest level that responds to a system size request is the one cont
 
 ## RECORDING A MACRO
 
-The module supports Companion's action recording. On a button, use the learn (record) option on the action list, then press your source and destination buttons and the salvo switch as you normally would. Each staged or cut route is added as a "Preset a route" or "Cut a route" action, and the salvo switch as "Switch preset crosspoint(s)". Staging the same destination again replaces its earlier action. Stop recording and the button now repeats that salvo in one press.
+The module supports Companion's action recording. On a button, use the learn (record) option on the action list, then press your source and destination buttons and the salvo switch as you normally would. Each staged or cut route is added as a "Preset a route" or "Cut a route" action, and the salvo switch as "Switch preset crosspoint(s)". Staging the same destination again before a take replaces its earlier action; everything else is kept in the order you did it, including several salvos and clears. Stop recording and the button now repeats that salvo in one press.
 
 Companion's own recording controls are internal actions, which module presets cannot contain, so set up three buttons on a page (the blank module-style preset makes a good macro button):
 
@@ -57,7 +57,7 @@ Selection variables are empty when nothing is selected, and are cleared after a 
 - Preset a route / Cut a route: stage or cut one explicit source to destination pair, without using the selection
 - Clear preset crosspoint(s): discard all staged presets
 - Preset video format (format, reference and switching point, each of which can be "Use the connection default" set in the connection settings), optionally applied straight away; Apply and Cancel preset video format. These are actions only, with no preset buttons: the router restarts when a new format is accepted and cannot report its current format, so there is no feedback and a stray press is costly.
-- Rename a destination or source
+- Rename a destination or source. The router may shorten a name or drop characters (an MFR tested kept 16 ASCII characters), so the module shows what it reports back and logs a warning if it differs
 - Lock / unlock a destination, or toggle the lock of the selected destination
 
 Operator actions are sent ahead of the module's own startup reads, but never interrupt a command already waiting for its prompt.

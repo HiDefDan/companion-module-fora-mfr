@@ -35,7 +35,7 @@ buttons already placed, keep working: their ids and option names are unchanged, 
 
 - **fix(protocol):** commands are sent one at a time and wait for the router's prompt, and so for all of a long reply, as its protocol requires. If no prompt arrives the module moves on after the manual's timeouts: 1 second, or 5 seconds for commands with long replies. Operator actions go ahead of the startup reads. v1 did not wait and could overrun the router.
 - **fix(protocol):** the video format replies (`UF!`, `UR!`) are logged, and `UR!E` is a warning that the router rejected the change.
-- **fix(protocol):** names sent to the router are upper case hex of UTF-8, at most 128 bytes, as the manual specifies. The system size request uses the manual's `@ F?<Lvl>` form.
+- **fix(protocol):** names are sent as upper case hex of UTF-8, as the manual specifies, and decoded the same way. After a rename the module reads the name back and shows what the router stored, warning if it differs: the MFR tested kept 16 characters and dropped non-ASCII ones. The system size request uses the manual's `@ F?<Lvl>` form.
 - **fix(protocol):** incoming data is framed per line across packets. The receive buffer was shared between instances, started with 32 NUL bytes and survived reconnects; it is now per connection and reset on connect.
 - **fix(protocol):** responses are parsed by one typed parser instead of substring checks, and a router that replies on the same line as the echo is handled.
 - **fix(lock):** lock status was requested before the router size was known on a first connection, so no locks were read. It is now requested once the size is known.
