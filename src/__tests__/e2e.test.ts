@@ -390,16 +390,38 @@ describe('ModuleInstance against the fake router over TCP', () => {
 			vi.advanceTimersByTime(1)
 			expect(sent().at(-1)).toBe('@ V?0')
 
-			// the router comes back: everything after that is read normally
+			// V? is ignored too: the router comes back only once it has V?, so V? is never answered.
+			// Answering it late would land its prompt on the next command and put the rest of the
+			// startup one prompt out of step.
+			await until(() => router.received.at(-1)?.command === '@ V?0', 'the router to get V?')
+			await settle()
 			router.ignore = () => false
-			vi.advanceTimersByTime(5000)
+			expect(router.commandsFrom(connection())).toEqual(['@ A?', '@ F?0', '@ S?0', '@ V?0'])
+
+			// V? has a long reply, so the module waits 5 s before the next command
+			vi.advanceTimersByTime(4999)
+			expect(sent().at(-1)).toBe('@ V?0')
+			vi.advanceTimersByTime(1)
+			expect(sent().at(-1)).toBe('@ K?SA,000')
+
+			// everything after that is read normally, one command per prompt
 			await until(() => sent().at(-1) === '@ W?0,27', 'the rest of the startup reads')
 			await settle()
+			expect(router.commandsFrom(connection())).toEqual(sent())
+			// The commands the module moved on from were never answered, so nothing was waiting for a
+			// prompt when the next one went out: none of the timeouts counts as sending early.
+			expect(router.violations).toEqual([])
+			expect(module.state.srcNames.size).toBe(SRC)
 			expect(module.state.dstNames.size).toBe(DST)
+			expect(module.state.locks.size).toBe(DST)
 			expect(module.state.routerId).toBeUndefined()
 			expect(module.state.routes.size).toBe(0)
+			expect(module.state.presets.size).toBe(0)
+
+			// the next refresh reads the routes it missed
 			await refresh()
 			expect(routes(module)).toEqual(routerRoutes())
+			expect(router.violations).toEqual([])
 		})
 	})
 
