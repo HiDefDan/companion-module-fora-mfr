@@ -60,18 +60,28 @@ export async function until(predicate: () => boolean, what = 'condition', timeou
 export class Hold {
 	readonly #matches: (command: string) => boolean
 	readonly at: number
+	#claimed = false
 	#reached = false
+	#isReleased = false
 	#release: (() => void) | undefined
 	readonly #released: Promise<void>
+	readonly #onRelease: (hold: Hold) => void
 
-	constructor(matches: (command: string) => boolean, at: number) {
+	constructor(matches: (command: string) => boolean, at: number, onRelease: (hold: Hold) => void = () => undefined) {
 		this.#matches = matches
 		this.at = at
+		this.#onRelease = onRelease
 		this.#released = new Promise((resolve) => (this.#release = resolve))
 	}
 
+	/** Not yet given to a reply, and this command is the one to hold */
 	matches(command: string): boolean {
-		return this.#matches(command)
+		return !this.#claimed && !this.#isReleased && this.#matches(command)
+	}
+
+	/** @internal called by the router when a reply takes this hold */
+	claim(): void {
+		this.#claimed = true
 	}
 
 	/** True once the first `at` bytes of the reply have been written */
@@ -85,8 +95,15 @@ export class Hold {
 		await this.#released
 	}
 
+	get released(): boolean {
+		return this.#isReleased
+	}
+
 	release(): void {
+		if (this.#isReleased) return
+		this.#isReleased = true
 		this.#release?.()
+		this.#onRelease(this)
 	}
 }
 
@@ -207,7 +224,8 @@ export class FakeMfr {
 	readonly connections: FakeMfrConnection[] = []
 
 	readonly #server: net.Server
-	readonly #holds: Hold[] = []
+	/** Every hold, waiting for its reply or pausing one, until it is released */
+	readonly #holds = new Set<Hold>()
 	#nextId = 1
 
 	constructor(options: FakeMfrOptions = {}) {
@@ -247,7 +265,8 @@ export class FakeMfr {
 
 	async stop(): Promise<void> {
 		this.dropClients()
-		for (const hold of this.#holds) hold.release()
+		// a paused reply too, so a failed test can't leave one stuck
+		for (const hold of [...this.#holds]) hold.release()
 		await new Promise<void>((resolve) => this.#server.close(() => resolve()))
 	}
 
@@ -272,8 +291,10 @@ export class FakeMfr {
 
 	/** Pause the direct reply to the next command matching `matches` after its first `at` bytes */
 	hold(matches: string | ((command: string) => boolean), at: number): Hold {
-		const hold = new Hold(typeof matches === 'string' ? (command) => command === matches : matches, at)
-		this.#holds.push(hold)
+		const hold = new Hold(typeof matches === 'string' ? (command) => command === matches : matches, at, (released) =>
+			this.#holds.delete(released),
+		)
+		this.#holds.add(hold)
 		return hold
 	}
 
@@ -316,8 +337,8 @@ export class FakeMfr {
 		connection.awaitingPrompt = true
 
 		const { direct, after } = this.#respond(connection, command)
-		const holdIndex = this.#holds.findIndex((hold) => hold.matches(command))
-		const hold = holdIndex >= 0 ? this.#holds.splice(holdIndex, 1)[0] : undefined
+		const hold = [...this.#holds].find((candidate) => candidate.matches(command))
+		hold?.claim()
 		connection.write(direct, { promptAt: direct.lastIndexOf('>'), hold })
 		if (after) this.#broadcast(after)
 	}
