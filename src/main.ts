@@ -6,7 +6,8 @@ import {
 	type SomeCompanionConfigField,
 } from '@companion-module/base'
 import { UpdateActions, type ActionsSchema } from './actions.js'
-import { GetConfigFields, type ModuleConfig } from './config.js'
+import { USE_DEFAULT, videoFormatLabel } from './choices.js'
+import { DEFAULT_VIDEO, GetConfigFields, type ModuleConfig } from './config.js'
 import { SELECTION_FEEDBACKS, UpdateFeedbacks, type FeedbacksSchema } from './feedbacks.js'
 import { UpdatePresets } from './presets.js'
 import {
@@ -75,6 +76,7 @@ export default class ModuleInstance extends InstanceBase<ModuleSchema> {
 		this.config = config
 		this.#publishDefinitions(true)
 		this.setVariableValues(selectionValues(this.state))
+		this.#publishVideoDefault()
 		this.#connect()
 	}
 
@@ -87,6 +89,7 @@ export default class ModuleInstance extends InstanceBase<ModuleSchema> {
 
 	async configUpdated(config: ModuleConfig): Promise<void> {
 		this.config = config
+		this.#publishVideoDefault()
 		this.#connect()
 	}
 
@@ -202,8 +205,31 @@ export default class ModuleInstance extends InstanceBase<ModuleSchema> {
 		this.#refreshRoutes()
 	}
 
-	setVideoFormat(format: string, reference: string, point: string): void {
-		this.#send(Cmd.setVideoFormat(format, reference, point))
+	/** `default` for any of the three means the value from the connection settings */
+	setVideoFormat(format: string, reference: string, point: string, apply = false): void {
+		const wanted = this.#videoDefaults()
+		this.#send(
+			Cmd.setVideoFormat(
+				format === USE_DEFAULT ? wanted.format : format,
+				reference === USE_DEFAULT ? wanted.reference : reference,
+				point === USE_DEFAULT ? wanted.point : point,
+			),
+		)
+		if (apply) this.#send(Cmd.applyVideoFormat())
+	}
+
+	#videoDefaults(): { format: string; reference: string; point: string } {
+		const { videoFormat, videoReference, videoPoint } = this.config
+		return {
+			format: videoFormat || DEFAULT_VIDEO.format,
+			reference: videoReference || DEFAULT_VIDEO.reference,
+			point: videoPoint || DEFAULT_VIDEO.point,
+		}
+	}
+
+	#publishVideoDefault(): void {
+		const { format, reference, point } = this.#videoDefaults()
+		this.setVariableValues({ video_format_default: videoFormatLabel(format, reference, point) })
 	}
 
 	applyVideoFormat(): void {

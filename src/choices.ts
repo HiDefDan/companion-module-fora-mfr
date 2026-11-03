@@ -38,6 +38,21 @@ export const SWITCHING_POINTS: DropdownChoice<string>[] = [
 	{ id: 'SE', label: 'Even' },
 ]
 
+/** First entry of the video format dropdowns: use the value set in the connection settings */
+export const USE_DEFAULT = 'default'
+const useDefault: DropdownChoice<string> = { id: USE_DEFAULT, label: 'Use the connection default' }
+export const VIDEO_FORMAT_CHOICES: DropdownChoice<string>[] = [useDefault, ...VIDEO_FORMATS]
+export const REFERENCE_CHOICES: DropdownChoice<string>[] = [useDefault, ...REFERENCES]
+export const SWITCHING_POINT_CHOICES: DropdownChoice<string>[] = [useDefault, ...SWITCHING_POINTS]
+
+const labelOf = (choices: DropdownChoice<string>[], id: string): string =>
+	choices.find((choice) => choice.id === id)?.label ?? id
+
+/** e.g. `1080/50i / Auto / Odd` */
+export function videoFormatLabel(format: string, reference: string, point: string): string {
+	return `${labelOf(VIDEO_FORMATS, format)} / ${labelOf(REFERENCES, reference)} / ${labelOf(SWITCHING_POINTS, point)}`
+}
+
 export const LOCK_MODES: DropdownChoice<string>[] = [
 	{ id: '0', label: 'Unlock' },
 	{ id: '1', label: 'Lock' },

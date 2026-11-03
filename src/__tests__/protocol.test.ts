@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { videoFormatLabel } from '../choices.js'
 import {
 	Cmd,
 	LineBuffer,
@@ -112,6 +113,13 @@ describe('commandTimeoutMs', () => {
 		for (const command of ['@ A?', '@ F?0', '@ X:0/02,05', '@ P:0/02,05', '@ B:C', '@ W?0,00']) {
 			expect(commandTimeoutMs(command)).toBe(1000)
 		}
+	})
+})
+
+describe('videoFormatLabel', () => {
+	it('names the format, reference and switching point', () => {
+		expect(videoFormatLabel('04', 'RA', 'SO')).toBe('1080/50i / Auto / Odd')
+		expect(videoFormatLabel('ZZ', 'RB', 'SF')).toBe('ZZ / B.B / Field')
 	})
 })
 

@@ -1,8 +1,9 @@
 import {
 	LOCK_MODES,
-	REFERENCES,
-	SWITCHING_POINTS,
-	VIDEO_FORMATS,
+	REFERENCE_CHOICES,
+	SWITCHING_POINT_CHOICES,
+	USE_DEFAULT,
+	VIDEO_FORMAT_CHOICES,
 	destinationChoices,
 	sourceChoices,
 } from './choices.js'
@@ -19,7 +20,7 @@ export type ActionsSchema = {
 	clearPresetXpts: { options: NoOptions }
 	presetRoute: { options: { dst: string; src: string } }
 	cutRoute: { options: { dst: string; src: string } }
-	setVideoFormat: { options: { format: string; ref: string; point: string } }
+	setVideoFormat: { options: { format: string; ref: string; point: string; apply?: boolean } }
 	applyVideoFormat: { options: NoOptions }
 	cancelVideoFormat: { options: NoOptions }
 	renameDst: { options: { dst: string; name: string } }
@@ -82,11 +83,41 @@ export function UpdateActions(self: ModuleInstance): void {
 		setVideoFormat: {
 			name: 'Preset video format',
 			options: [
-				{ type: 'dropdown', id: 'format', label: 'Set video format :', default: '00', choices: VIDEO_FORMATS },
-				{ type: 'dropdown', id: 'ref', label: 'Set reference type :', default: 'RA', choices: REFERENCES },
-				{ type: 'dropdown', id: 'point', label: 'Set switching point :', default: 'SF', choices: SWITCHING_POINTS },
+				{
+					type: 'dropdown',
+					id: 'format',
+					label: 'Set video format :',
+					default: USE_DEFAULT,
+					choices: VIDEO_FORMAT_CHOICES,
+				},
+				{
+					type: 'dropdown',
+					id: 'ref',
+					label: 'Set reference type :',
+					default: USE_DEFAULT,
+					choices: REFERENCE_CHOICES,
+				},
+				{
+					type: 'dropdown',
+					id: 'point',
+					label: 'Set switching point :',
+					default: USE_DEFAULT,
+					choices: SWITCHING_POINT_CHOICES,
+				},
+				{
+					type: 'checkbox',
+					id: 'apply',
+					label: 'Apply straight away (otherwise press Apply preset video format)',
+					default: false,
+				},
 			],
-			callback: (action) => self.setVideoFormat(action.options.format, action.options.ref, action.options.point),
+			callback: (action) =>
+				self.setVideoFormat(
+					action.options.format,
+					action.options.ref,
+					action.options.point,
+					action.options.apply === true,
+				),
 		},
 		applyVideoFormat: {
 			name: 'Apply preset video format',

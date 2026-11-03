@@ -372,6 +372,16 @@ describe('ModuleInstance against a simulated router', () => {
 		expect(module.state.selectedDst).toBeUndefined()
 	})
 
+	it('sets the video format from the connection default, and applies it on request', () => {
+		startUp()
+		module.config.videoFormat = '05'
+		module.setVideoFormat('default', 'RT', 'default', true)
+		reply(socket, socket.sent.at(-1)!.trim()) // finish the command already in flight
+		expect(socket.sent.at(-1)).toBe('@ UF:05/RT,SO\r')
+		reply(socket, '@ UF:05/RT,SO')
+		expect(socket.sent.at(-1)).toBe('@ UE:A\r')
+	})
+
 	it('keeps the source when another destination is selected, until the selection is cut', () => {
 		startUp()
 		module.selectSource('02')

@@ -1,11 +1,17 @@
 import { Regex, type SomeCompanionConfigField } from '@companion-module/base'
+import { REFERENCES, SWITCHING_POINTS, VIDEO_FORMATS } from './choices.js'
 
 export type ModuleConfig = {
 	host: string
 	port: number
 	pollInterval?: number
 	autoRoute?: 'off' | 'cut' | 'preset'
+	videoFormat?: string
+	videoReference?: string
+	videoPoint?: string
 }
+
+export const DEFAULT_VIDEO = { format: '04', reference: 'RA', point: 'SO' }
 
 export function GetConfigFields(): SomeCompanionConfigField[] {
 	return [
@@ -54,6 +60,39 @@ export function GetConfigFields(): SomeCompanionConfigField[] {
 				{ id: 'cut', label: 'Cut straight away' },
 				{ id: 'preset', label: 'Stage a preset straight away (build a salvo, then take it)' },
 			],
+		},
+		{
+			type: 'static-text',
+			id: 'videoInfo',
+			width: 12,
+			label: 'Video format',
+			value:
+				'The video format, reference and switching point used by the "Set router video format" action and button when ' +
+				'they are set to "Use the connection default". The module never changes the router\'s format by itself.',
+		},
+		{
+			type: 'dropdown',
+			id: 'videoFormat',
+			label: 'Default video format',
+			width: 4,
+			default: DEFAULT_VIDEO.format,
+			choices: VIDEO_FORMATS,
+		},
+		{
+			type: 'dropdown',
+			id: 'videoReference',
+			label: 'Default reference',
+			width: 4,
+			default: DEFAULT_VIDEO.reference,
+			choices: REFERENCES,
+		},
+		{
+			type: 'dropdown',
+			id: 'videoPoint',
+			label: 'Default switching point',
+			width: 4,
+			default: DEFAULT_VIDEO.point,
+			choices: SWITCHING_POINTS,
 		},
 	]
 }
