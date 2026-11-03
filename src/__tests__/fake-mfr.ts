@@ -45,10 +45,16 @@ const hex = (value: number): string => value.toString(16).toUpperCase()
 const hexPad = (value: number, width: number): string => hex(value).padStart(width, '0')
 
 /**
+ * How long `until` waits by default. Well under vitest's 5 s test timeout, so a wait that never ends
+ * fails with its own message rather than as a timed out test.
+ */
+export const UNTIL_TIMEOUT_MS = 2000
+
+/**
  * Wait for `predicate` without relying on `setTimeout`, so it still works while a test fakes the
  * timers. Gives the event loop a turn between checks.
  */
-export async function until(predicate: () => boolean, what = 'condition', timeoutMs = 5000): Promise<void> {
+export async function until(predicate: () => boolean, what = 'condition', timeoutMs = UNTIL_TIMEOUT_MS): Promise<void> {
 	const deadline = performance.now() + timeoutMs
 	while (!predicate()) {
 		if (performance.now() > deadline) throw new Error(`Timed out waiting for ${what}`)
