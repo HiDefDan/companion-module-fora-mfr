@@ -37,6 +37,7 @@ vi.mock('@companion-module/base', async (importOriginal) => {
 		setPresetDefinitions = vi.fn()
 		checkFeedbacks = vi.fn()
 		checkAllFeedbacks = vi.fn()
+		recordAction = vi.fn()
 	}
 	return { ...actual, InstanceBase: StubInstanceBase, TCPHelper: FakeSocket }
 })
@@ -45,9 +46,9 @@ const { default: ModuleInstance } = await import('../main.js')
 
 const hex = (text: string): string => Buffer.from(text, 'latin1').toString('hex').toUpperCase()
 
-/** Echo the command the module is waiting on, then deliver any replies */
+/** Echo the command the module is waiting on, deliver any replies, then the prompt with no line break after it */
 function reply(socket: FakeSocket, echo: string, ...lines: string[]): void {
-	socket.receive([echo, ...lines].join('\r\n') + '\r\n')
+	socket.receive([echo, ...lines].join('\r\n') + '\r\n>')
 }
 
 describe('ModuleInstance against a simulated router', () => {
@@ -71,18 +72,45 @@ describe('ModuleInstance against a simulated router', () => {
 	/** Walk the startup exchange for a 4 output, 8 input router */
 	function startUp(): void {
 		reply(socket, '@ A?', '@ A:01')
-		reply(socket, '@ F? 0', 'F:003F,3F/03,07')
+		reply(socket, '@ F?0', 'F:003F,3F/03,07')
 	}
 
-	it('sends one command at a time, waiting for each echo', () => {
+	it('sends one command at a time, waiting for the prompt rather than the echo', () => {
 		expect(socket.sent).toEqual(['@ A?\r'])
-		reply(socket, '@ A?', '@ A:01')
-		expect(socket.sent).toEqual(['@ A?\r', '@ F? 0\r'])
+		socket.receive('@ A?\r\r\n')
+		expect(socket.sent).toEqual(['@ A?\r'])
+		socket.receive('A:01\r\n\r\n>')
+		expect(socket.sent).toEqual(['@ A?\r', '@ F?0\r'])
 	})
 
-	it('learns the router size, then requests crosspoints, names and locks without the leftover level probes', () => {
-		// The echo and the F: reply arrive together, so the probe for level 1 is already out when the
-		// size is parsed. It is harmless; the other six probes are dropped from the queue.
+	it('does not send the next command in the middle of a long reply', () => {
+		startUp()
+		expect(socket.sent.at(-1)).toBe('@ S?0\r')
+		socket.receive('@ S?0\r\r\nS:00,1\r\n\r\n')
+		expect(socket.sent.at(-1)).toBe('@ S?0\r')
+		socket.receive('S:01,2\r\n\r\n>')
+		expect(socket.sent.at(-1)).toBe('@ V?0\r')
+	})
+
+	it('waits longer for a long reply than a short one when no prompt arrives', () => {
+		expect(socket.sent.at(-1)).toBe('@ A?\r')
+		vi.advanceTimersByTime(1000)
+		expect(socket.sent.at(-1)).toBe('@ F?0\r')
+		socket.receive('@ F?0\rF:003F,3F/03,07\r\r\n>')
+		expect(socket.sent.at(-1)).toBe('@ S?0\r')
+		vi.advanceTimersByTime(4999)
+		expect(socket.sent.at(-1)).toBe('@ S?0\r')
+		vi.advanceTimersByTime(1)
+		expect(socket.sent.at(-1)).toBe('@ V?0\r')
+	})
+
+	it('warns when the router rejects a video format change', () => {
+		startUp()
+		socket.receive('UR!E\r\n')
+		expect(module.log).toHaveBeenCalledWith('warn', expect.stringContaining('rejected'))
+	})
+
+	it('learns the router size, then requests crosspoints, names and locks without the other level probes', () => {
 		startUp()
 		expect(module.state.level).toBe('0')
 		expect(module.state.dstCount).toBe(4)
@@ -98,8 +126,8 @@ describe('ModuleInstance against a simulated router', () => {
 			reply(socket, next)
 		}
 		expect(requested).toEqual([
-			'@ F? 1',
 			'@ S?0',
+			'@ V?0',
 			'@ K?SA,000',
 			'@ K?DA,000',
 			'@ W?0,00',
@@ -107,6 +135,60 @@ describe('ModuleInstance against a simulated router', () => {
 			'@ W?0,02',
 			'@ W?0,03',
 		])
+	})
+
+	it('re-reads routes and staged presets periodically once idle, and replaces what was staged', () => {
+		startUp()
+		for (let i = 0; i < 20; i++) {
+			const next = socket.sent.at(-1)!.trim()
+			reply(socket, next)
+			if (next === '@ W?0,03') break
+		}
+		module.state.presets.set(1, 5)
+		const before = socket.sent.length
+		vi.advanceTimersByTime(5000)
+		expect(socket.sent.slice(before)).toEqual(['@ S?0\r'])
+		reply(socket, '@ S?0')
+		expect(socket.sent.at(-1)).toBe('@ V?0\r')
+		// nothing is replaced until the whole list has arrived, so the buttons don't flicker
+		socket.receive('@ V?0\r\r\n')
+		expect(module.state.presets.get(1)).toBe(5)
+		socket.receive('>')
+		// the router listed no staged routes
+		expect(module.state.presets.size).toBe(0)
+	})
+
+	it('takes the staged list from the reply to V?, and keeps what it has if the prompt never comes', () => {
+		startUp()
+		reply(socket, '@ S?0')
+		reply(socket, '@ V?0', 'V:01,05', 'V:02,06')
+		expect([...module.state.presets]).toEqual([
+			[1, 5],
+			[2, 6],
+		])
+
+		// the next read gets part way, then times out: the partial list must not replace the staged routes
+		module.state.presets.set(3, 7)
+		for (let i = 0; i < 20 && !socket.sent.at(-1)!.startsWith('@ W?0,03'); i++)
+			reply(socket, socket.sent.at(-1)!.trim())
+		reply(socket, '@ W?0,03')
+		vi.advanceTimersByTime(5000)
+		reply(socket, '@ S?0')
+		socket.receive('@ V?0\r\r\nV:01,05\r\n')
+		vi.advanceTimersByTime(5000)
+		expect(module.state.presets.size).toBe(3)
+	})
+
+	it('does not touch variables or feedbacks when a refresh finds nothing changed', () => {
+		startUp()
+		socket.receive('S:01,05\r\n')
+		const setVars = module.setVariableValues as unknown as ReturnType<typeof vi.fn>
+		const check = module.checkFeedbacks as unknown as ReturnType<typeof vi.fn>
+		setVars.mockClear()
+		check.mockClear()
+		socket.receive('S:01,05\r\n')
+		expect(setVars).not.toHaveBeenCalled()
+		expect(check).not.toHaveBeenCalled()
 	})
 
 	it('defines variables for the ports once the size is known', () => {
@@ -161,12 +243,12 @@ describe('ModuleInstance against a simulated router', () => {
 		startUp()
 		module.selectDestination('02')
 		module.selectSource('05')
-		expect(module.state.hasPair).toBe(true)
+		expect(module.state.selectedSrc).toBe(5)
 
 		module.routeSelection('cut')
-		expect(module.state.hasPair).toBe(false)
+		expect(module.state.selectedSrc).toBeUndefined()
 
-		// the command in flight finishes first (the level 1 probe), then the cut, before the S? read queued earlier
+		// the command in flight finishes first (the S? read), then the cut, before the V? read queued earlier
 		reply(socket, socket.sent.at(-1)!.trim())
 		expect(socket.sent.at(-1)).toBe('@ X:0/02,05\r')
 	})
@@ -196,25 +278,107 @@ describe('ModuleInstance against a simulated router', () => {
 		expect(module.log).toHaveBeenCalledWith('warn', expect.stringContaining('outside'))
 	})
 
-	it('only blinks while both a source and destination are selected', () => {
+	it('stages several routes into a salvo, then takes them together', () => {
 		startUp()
+		module.config.autoRoute = 'preset'
+		module.selectSource('05')
 		module.selectDestination('01')
-		vi.advanceTimersByTime(1000)
-		expect(module.blink).toBe(false)
+		module.selectDestination('02')
+		expect(module.state.presets.get(1)).toBe(5)
+		expect(module.state.presets.get(2)).toBe(5)
+		// the pair stays on show; the next destination reuses the source, the next source starts afresh
+		expect(module.state.selectedSrc).toBe(5)
+		expect(module.state.selectedDst).toBe(2)
+		module.selectSource('06')
+		expect(module.state.selectedDst).toBeUndefined()
+		expect(module.state.presets.size).toBe(2)
+		module.selectSource('05')
+		module.cutPresets()
+		expect(module.state.presets.size).toBe(0)
+		expect(module.state.selectedSrc).toBeUndefined()
+	})
 
-		module.selectSource('02')
-		vi.advanceTimersByTime(500)
-		expect(module.blink).toBe(true)
-		vi.advanceTimersByTime(500)
-		expect(module.blink).toBe(false)
-		vi.advanceTimersByTime(500)
-		expect(module.blink).toBe(true)
+	/** Answer whatever the module sends until it stops, returning the routing commands in order */
+	function drainRouting(): string[] {
+		for (let i = 0; i < 40; i++) {
+			const sentBefore = socket.sent.length
+			reply(socket, socket.sent.at(-1)!.trim())
+			if (socket.sent.length === sentBefore) break
+		}
+		return socket.sent.map((command) => command.trim()).filter((command) => /^@ (?:X:|P:|B:)/.test(command))
+	}
 
-		// selecting a new destination drops the source, which stops the blinking
+	it('removes a cut destination from the staged routes, keeping the others', () => {
+		startUp()
+		module.routeExplicit('preset', '01', '05')
+		module.routeExplicit('preset', '02', '06')
+		module.routeExplicit('cut', '01', '03')
+		expect([...module.state.presets]).toEqual([[2, 6]])
+		expect(drainRouting()).toEqual(['@ P:0/01,05', '@ P:0/02,06', '@ X:0/01,03', '@ B:C', '@ P:0/02,06'])
+	})
+
+	it('refuses a cut to a locked destination, keeping the selection and the staged route', () => {
+		startUp()
+		socket.receive('W!001,01,1\r\n')
+		module.selectSource('05')
+		module.selectDestination('01')
+		module.routeSelection('preset')
+		module.routeSelection('cut')
+		module.routeExplicit('cut', '01', '03')
+		expect(module.log).toHaveBeenCalledWith('warn', expect.stringContaining('is locked'))
+		expect(module.state.selectedDst).toBe(1)
+		expect(module.state.selectedSrc).toBe(5)
+		expect(module.state.presets.get(1)).toBe(5)
+		expect(drainRouting()).toEqual(['@ P:0/01,05'])
+
+		socket.receive('W!001,0,0\r\n')
+		module.routeSelection('cut')
+		expect(module.state.selectedDst).toBeUndefined()
+	})
+
+	it('leaves the staged routes alone when the cut destination has none', () => {
+		startUp()
+		module.routeExplicit('preset', '02', '06')
+		module.routeExplicit('cut', '01', '03')
+		expect(drainRouting()).toEqual(['@ P:0/02,06', '@ X:0/01,03'])
+	})
+
+	it('records the routes the operator makes while Companion is recording', () => {
+		startUp()
+		module.config.autoRoute = 'preset'
+		module.handleStartStopRecordActions(true)
+		module.selectSource('05')
+		module.selectDestination('01')
+		module.selectDestination('02')
+		module.cutPresets()
+		const record = module.recordAction as unknown as ReturnType<typeof vi.fn>
+		expect(record.mock.calls.map(([action]) => action)).toEqual([
+			{ actionId: 'presetRoute', options: { dst: '01', src: '05' } },
+			{ actionId: 'presetRoute', options: { dst: '02', src: '05' } },
+			{ actionId: 'switchPresetXpts', options: {} },
+		])
+		module.handleStartStopRecordActions(false)
+		module.selectSource('05')
 		module.selectDestination('03')
-		expect(module.blink).toBe(false)
-		vi.advanceTimersByTime(2000)
-		expect(module.blink).toBe(false)
+		expect(record).toHaveBeenCalledTimes(3)
+	})
+
+	it('stages and cuts explicit routes without touching the selection', () => {
+		startUp()
+		module.selectSource('01')
+		module.routeExplicit('preset', '02', '06')
+		expect(module.state.presets.get(2)).toBe(6)
+		expect(module.state.selectedSrc).toBe(1)
+		expect(module.state.selectedDst).toBeUndefined()
+	})
+
+	it('keeps the source when another destination is selected, until the selection is cut', () => {
+		startUp()
+		module.selectSource('02')
+		module.selectDestination('01')
+		module.selectDestination('03')
+		expect(module.state.selectedSrc).toBe(2)
+		expect(module.state.selectedDst).toBe(3)
 	})
 
 	it('forgets partial input and queued commands when the connection drops and returns', () => {

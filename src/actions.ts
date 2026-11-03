@@ -16,12 +16,15 @@ export type ActionsSchema = {
 	switchXpt: { options: NoOptions }
 	presetXpt: { options: NoOptions }
 	switchPresetXpts: { options: NoOptions }
+	clearPresetXpts: { options: NoOptions }
+	presetRoute: { options: { dst: string; src: string } }
+	cutRoute: { options: { dst: string; src: string } }
 	setVideoFormat: { options: { format: string; ref: string; point: string } }
 	applyVideoFormat: { options: NoOptions }
 	cancelVideoFormat: { options: NoOptions }
 	renameDst: { options: { dst: string; name: string } }
 	renameSrc: { options: { src: string; name: string } }
-	lockDst: { options: { dst: string; mode: string } }
+	lockDst: { options: { dst: string; mode: string; useSelected?: boolean } }
 }
 
 export function UpdateActions(self: ModuleInstance): void {
@@ -53,6 +56,28 @@ export function UpdateActions(self: ModuleInstance): void {
 			name: 'Switch preset crosspoint(s)',
 			options: [],
 			callback: () => self.cutPresets(),
+		},
+		presetRoute: {
+			name: 'Preset a route: stage this source to this destination',
+			description: 'Stage one route without using the selection. Add several, then Switch preset crosspoint(s).',
+			options: [
+				{ type: 'dropdown', id: 'dst', label: 'Destination :', default: '00', choices: dst },
+				{ type: 'dropdown', id: 'src', label: 'Source :', default: '00', choices: src },
+			],
+			callback: (action) => self.routeExplicit('preset', action.options.dst, action.options.src),
+		},
+		cutRoute: {
+			name: 'Cut a route: switch this source to this destination now',
+			options: [
+				{ type: 'dropdown', id: 'dst', label: 'Destination :', default: '00', choices: dst },
+				{ type: 'dropdown', id: 'src', label: 'Source :', default: '00', choices: src },
+			],
+			callback: (action) => self.routeExplicit('cut', action.options.dst, action.options.src),
+		},
+		clearPresetXpts: {
+			name: 'Clear preset crosspoint(s)',
+			options: [],
+			callback: () => self.clearPresets(),
 		},
 		setVideoFormat: {
 			name: 'Preset video format',
@@ -93,9 +118,16 @@ export function UpdateActions(self: ModuleInstance): void {
 			name: 'Lock/Unlock a destination',
 			options: [
 				{ type: 'dropdown', id: 'dst', label: 'Destination :', default: '00', choices: dst },
+				{
+					type: 'checkbox',
+					id: 'useSelected',
+					label: 'Use the selected destination (ignores the destination above)',
+					default: false,
+				},
 				{ type: 'dropdown', id: 'mode', label: 'Lock mode :', default: '0', choices: LOCK_MODES },
 			],
-			callback: (action) => self.lockDestination(action.options.dst, action.options.mode),
+			callback: (action) =>
+				self.lockDestination(action.options.dst, action.options.mode, action.options.useSelected === true),
 		},
 	})
 }

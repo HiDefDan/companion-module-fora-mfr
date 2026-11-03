@@ -7,6 +7,7 @@ export const SELECTION_FEEDBACKS = [
 	'SelectedDestination',
 	'RoutedSource',
 	'RoutedDestination',
+	'PresetSource',
 ] as const
 
 export type FeedbacksSchema = {
@@ -14,6 +15,8 @@ export type FeedbacksSchema = {
 	SelectedDestination: { type: 'boolean'; options: { dst: string } }
 	RoutedSource: { type: 'boolean'; options: { src: string } }
 	RoutedDestination: { type: 'boolean'; options: { dst: string } }
+	PresetSource: { type: 'boolean'; options: { src: string } }
+	PresetDestination: { type: 'boolean'; options: { dst: string } }
 	LockedDestination: { type: 'boolean'; options: { dst: string } }
 }
 
@@ -31,7 +34,7 @@ export function UpdateFeedbacks(self: ModuleInstance): void {
 			options: [{ type: 'dropdown', id: 'src', label: 'Source :', default: '00', choices: src }],
 			callback: (feedback) => {
 				const port = parseHex(feedback.options.src)
-				return port !== undefined && state.isSrcSelected(port, self.blink)
+				return port !== undefined && state.isSrcSelected(port)
 			},
 		},
 		SelectedDestination: {
@@ -42,7 +45,7 @@ export function UpdateFeedbacks(self: ModuleInstance): void {
 			options: [{ type: 'dropdown', id: 'dst', label: 'Destination :', default: '00', choices: dst }],
 			callback: (feedback) => {
 				const port = parseHex(feedback.options.dst)
-				return port !== undefined && state.isDstSelected(port, self.blink)
+				return port !== undefined && state.isDstSelected(port)
 			},
 		},
 		RoutedSource: {
@@ -65,6 +68,28 @@ export function UpdateFeedbacks(self: ModuleInstance): void {
 			callback: (feedback) => {
 				const port = parseHex(feedback.options.dst)
 				return port !== undefined && state.isRoutedDst(port)
+			},
+		},
+		PresetSource: {
+			name: 'Preset source',
+			type: 'boolean',
+			description: 'True if this source is staged by a preset for the selected destination',
+			defaultStyle: { bgcolor: 0xff8000, color: 0x000000 },
+			options: [{ type: 'dropdown', id: 'src', label: 'Source :', default: '00', choices: src }],
+			callback: (feedback) => {
+				const port = parseHex(feedback.options.src)
+				return port !== undefined && state.selectedDst !== undefined && state.pendingSrc(state.selectedDst) === port
+			},
+		},
+		PresetDestination: {
+			name: 'Preset destination',
+			type: 'boolean',
+			description: 'True if a preset is staged for this destination and has not been taken yet',
+			defaultStyle: { bgcolor: 0xff8000, color: 0x000000 },
+			options: [{ type: 'dropdown', id: 'dst', label: 'Destination :', default: '00', choices: dst }],
+			callback: (feedback) => {
+				const port = parseHex(feedback.options.dst)
+				return port !== undefined && state.pendingSrc(port) !== undefined
 			},
 		},
 		LockedDestination: {

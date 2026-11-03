@@ -1,11 +1,11 @@
 /**
- * Sends commands one at a time. The MFR asks clients to wait for the echo of each command
- * before sending the next, so the next command is released on echo, or after `timeoutMs`
- * if the echo never arrives (echo is a router port setting and may be off).
+ * Sends commands one at a time. The MFR asks clients to send the next command only after the prompt
+ * that follows the previous command and its replies, so the next command is released on the prompt,
+ * or after `timeoutFor(command)` if the prompt never arrives.
  */
 export class CommandQueue {
 	readonly #send: (command: string) => boolean
-	readonly #timeoutMs: number
+	readonly #timeoutFor: (command: string) => number
 	readonly #maxLength: number
 	/** Operator commands, always sent ahead of the bulk reads in `#queue` */
 	#urgent: string[] = []
@@ -13,15 +13,20 @@ export class CommandQueue {
 	#inFlight: string | undefined
 	#timer: ReturnType<typeof setTimeout> | undefined
 
-	constructor(send: (command: string) => boolean, timeoutMs = 500, maxLength = 1024) {
+	constructor(send: (command: string) => boolean, timeoutFor: (command: string) => number, maxLength = 1024) {
 		this.#send = send
-		this.#timeoutMs = timeoutMs
+		this.#timeoutFor = timeoutFor
 		this.#maxLength = maxLength
 	}
 
-	/** The command currently waiting for its echo */
+	/** The command currently waiting for its prompt */
 	get pending(): string | undefined {
 		return this.#inFlight
+	}
+
+	/** Nothing is waiting for a prompt or queued */
+	get idle(): boolean {
+		return this.#inFlight === undefined && this.#urgent.length === 0 && this.#queue.length === 0
 	}
 
 	/**
@@ -35,7 +40,7 @@ export class CommandQueue {
 		return true
 	}
 
-	/** Call when the router's echo for the pending command has been seen */
+	/** Call when the router's prompt for the pending command has been seen */
 	acknowledge(): void {
 		if (this.#inFlight === undefined) return
 		this.#inFlight = undefined
@@ -60,9 +65,9 @@ export class CommandQueue {
 		const command = this.#urgent.shift() ?? this.#queue.shift()
 		if (command === undefined) return
 		this.#inFlight = command
-		this.#timer = setTimeout(() => this.acknowledge(), this.#timeoutMs)
+		this.#timer = setTimeout(() => this.acknowledge(), this.#timeoutFor(command))
 		if (!this.#send(command)) {
-			// not connected: nothing will ever be echoed
+			// not connected: no prompt will ever arrive
 			this.clear()
 		}
 	}

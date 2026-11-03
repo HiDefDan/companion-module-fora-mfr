@@ -13,11 +13,17 @@ export class RouterState {
 	readonly srcNames = new Map<number, string>()
 	/** destination -> source currently routed */
 	readonly routes = new Map<number, number>()
+	/** destination -> source staged by a preset, waiting for the salvo to be taken */
+	readonly presets = new Map<number, number>()
 	/** destination -> lock mode (0 unlocked, 1 lock all, 2 lock others) */
 	readonly locks = new Map<number, number>()
+	/** destination -> unit ID that set the lock */
+	readonly lockOwners = new Map<number, string>()
 
 	selectedDst: number | undefined
 	selectedSrc: number | undefined
+	/** The pair on show has been staged; the next source starts a new pair, the next destination reuses the source */
+	staged = false
 	active: ActiveSelection | undefined
 
 	setSize(outputs: number, inputs: number): boolean {
@@ -45,16 +51,19 @@ export class RouterState {
 
 	selectDst(index: number): void {
 		this.selectedDst = index
-		this.selectedSrc = undefined
+		this.staged = false
 		this.active = 'dst'
 	}
 
 	selectSrc(index: number): void {
+		if (this.staged) this.selectedDst = undefined
+		this.staged = false
 		this.selectedSrc = index
 		this.active = 'src'
 	}
 
 	clearSelection(): void {
+		this.staged = false
 		this.selectedDst = undefined
 		this.selectedSrc = undefined
 		this.active = undefined
@@ -65,17 +74,18 @@ export class RouterState {
 		return this.selectedDst === undefined ? undefined : this.routes.get(this.selectedDst)
 	}
 
-	/** Both ends chosen, so the unselected-looking half of the pair should blink */
-	get hasPair(): boolean {
-		return this.selectedDst !== undefined && this.selectedSrc !== undefined
+	isSrcSelected(src: number): boolean {
+		return this.selectedSrc === src
 	}
 
-	isSrcSelected(src: number, blink: boolean): boolean {
-		return this.selectedSrc === src && (this.active === 'src' || (this.active === 'dst' && blink))
+	isDstSelected(dst: number): boolean {
+		return this.selectedDst === dst
 	}
 
-	isDstSelected(dst: number, blink: boolean): boolean {
-		return this.selectedDst === dst && (this.active === 'dst' || (this.active === 'src' && blink))
+	/** Name of the source routed to `dst`, or '' while the route is not known */
+	routedSrcName(dst: number): string {
+		const src = this.routes.get(dst)
+		return src === undefined ? '' : this.srcName(src)
 	}
 
 	/** True for the source routed to the selected destination */
@@ -88,7 +98,19 @@ export class RouterState {
 		return this.active === 'src' && this.selectedSrc !== undefined && this.routes.get(dst) === this.selectedSrc
 	}
 
+	/** The source staged for `dst`, if it differs from what is routed now */
+	pendingSrc(dst: number): number | undefined {
+		const staged = this.presets.get(dst)
+		return staged !== undefined && staged !== this.routes.get(dst) ? staged : undefined
+	}
+
 	isLocked(dst: number): boolean {
 		return (this.locks.get(dst) ?? 0) > 0
+	}
+
+	/** The router won't switch this destination for us: locked for all units, or for others by another unit */
+	refusesCut(dst: number): boolean {
+		const mode = this.locks.get(dst)
+		return mode === 1 || (mode === 2 && this.lockOwners.get(dst) !== this.routerId)
 	}
 }

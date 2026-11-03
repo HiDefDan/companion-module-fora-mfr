@@ -3,6 +3,8 @@ import { Regex, type SomeCompanionConfigField } from '@companion-module/base'
 export type ModuleConfig = {
 	host: string
 	port: number
+	pollInterval?: number
+	autoRoute?: 'off' | 'cut' | 'preset'
 }
 
 export function GetConfigFields(): SomeCompanionConfigField[] {
@@ -31,6 +33,27 @@ export function GetConfigFields(): SomeCompanionConfigField[] {
 			min: 1,
 			max: 65535,
 			default: 23,
+		},
+		{
+			type: 'number',
+			id: 'pollInterval',
+			label: 'Refresh routes from the router every (seconds, 0 = never)',
+			width: 6,
+			min: 0,
+			max: 3600,
+			default: 5,
+		},
+		{
+			type: 'dropdown',
+			id: 'autoRoute',
+			label: 'When a destination and a source are both selected',
+			width: 12,
+			default: 'off',
+			choices: [
+				{ id: 'off', label: 'Wait for the cut or preset button' },
+				{ id: 'cut', label: 'Cut straight away' },
+				{ id: 'preset', label: 'Stage a preset straight away (build a salvo, then take it)' },
+			],
 		},
 	]
 }

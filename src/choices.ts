@@ -41,6 +41,7 @@ export const SWITCHING_POINTS: DropdownChoice<string>[] = [
 export const LOCK_MODES: DropdownChoice<string>[] = [
 	{ id: '0', label: 'Unlock' },
 	{ id: '1', label: 'Lock' },
+	{ id: 'toggle', label: 'Toggle lock / unlock' },
 	// { id: '2', label: 'Lock others' }, // only valid in a multiple router system
 ]
 

@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { CommandQueue } from '../queue.js'
 
+const after500 = (): number => 500
+
 describe('CommandQueue', () => {
 	let sent: string[]
 	let connected: boolean
@@ -18,7 +20,7 @@ describe('CommandQueue', () => {
 	afterEach(() => vi.useRealTimers())
 
 	it('sends the first command immediately and holds the rest until acknowledged', () => {
-		const queue = new CommandQueue(send)
+		const queue = new CommandQueue(send, after500)
 		queue.enqueue('a')
 		queue.enqueue('b')
 		queue.enqueue('c')
@@ -33,25 +35,28 @@ describe('CommandQueue', () => {
 		expect(queue.pending).toBeUndefined()
 	})
 
-	it('moves on after the timeout if no echo arrives', () => {
-		const queue = new CommandQueue(send, 500)
-		queue.enqueue('a')
-		queue.enqueue('b')
-		vi.advanceTimersByTime(499)
-		expect(sent).toEqual(['a'])
+	it('moves on after the timeout for that command if no prompt arrives', () => {
+		const queue = new CommandQueue(send, (command) => (command === 'long' ? 5000 : 1000))
+		queue.enqueue('long')
+		queue.enqueue('short')
+		queue.enqueue('next')
+		vi.advanceTimersByTime(4999)
+		expect(sent).toEqual(['long'])
 		vi.advanceTimersByTime(1)
-		expect(sent).toEqual(['a', 'b'])
+		expect(sent).toEqual(['long', 'short'])
+		vi.advanceTimersByTime(1000)
+		expect(sent).toEqual(['long', 'short', 'next'])
 	})
 
-	it('ignores an echo when nothing is pending', () => {
-		const queue = new CommandQueue(send)
+	it('ignores a prompt when nothing is pending', () => {
+		const queue = new CommandQueue(send, after500)
 		expect(() => queue.acknowledge()).not.toThrow()
 		queue.enqueue('a')
 		expect(sent).toEqual(['a'])
 	})
 
 	it('does not let a stale timer release the next command early', () => {
-		const queue = new CommandQueue(send, 500)
+		const queue = new CommandQueue(send, after500)
 		queue.enqueue('a')
 		queue.enqueue('b')
 		vi.advanceTimersByTime(400)
@@ -64,7 +69,7 @@ describe('CommandQueue', () => {
 	})
 
 	it('drops everything when clear is called', () => {
-		const queue = new CommandQueue(send)
+		const queue = new CommandQueue(send, after500)
 		queue.enqueue('a')
 		queue.enqueue('b')
 		queue.clear()
@@ -74,7 +79,7 @@ describe('CommandQueue', () => {
 	})
 
 	it('abandons the queue if the connection is gone', () => {
-		const queue = new CommandQueue(send)
+		const queue = new CommandQueue(send, after500)
 		connected = false
 		queue.enqueue('a')
 		queue.enqueue('b')
@@ -87,7 +92,7 @@ describe('CommandQueue', () => {
 	})
 
 	it('refuses commands once full', () => {
-		const queue = new CommandQueue(send, 500, 2)
+		const queue = new CommandQueue(send, after500, 2)
 		expect(queue.enqueue('a')).toBe(true) // goes straight out
 		expect(queue.enqueue('b')).toBe(true)
 		expect(queue.enqueue('c')).toBe(true)
@@ -99,7 +104,7 @@ describe('CommandQueue.drop', () => {
 	it('removes only queued commands that match, never the one in flight', () => {
 		vi.useFakeTimers()
 		const sent: string[] = []
-		const queue = new CommandQueue((c) => (sent.push(c), true))
+		const queue = new CommandQueue((c) => (sent.push(c), true), after500)
 		queue.enqueue('@ F? 0')
 		queue.enqueue('@ F? 1')
 		queue.enqueue('@ S?0')
@@ -114,7 +119,7 @@ describe('CommandQueue urgent lane', () => {
 	it('sends urgent commands ahead of queued ones, in order, without interrupting the one in flight', () => {
 		vi.useFakeTimers()
 		const sent: string[] = []
-		const queue = new CommandQueue((c) => (sent.push(c), true))
+		const queue = new CommandQueue((c) => (sent.push(c), true), after500)
 		queue.enqueue('read1')
 		queue.enqueue('read2')
 		queue.enqueue('read3')

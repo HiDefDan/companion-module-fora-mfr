@@ -12,14 +12,14 @@ function routerWith(): RouterState {
 }
 
 describe('RouterState selection', () => {
-	it('selecting a destination clears the source and marks destination active', () => {
+	it('selecting a destination keeps the source and marks destination active', () => {
 		const state = routerWith()
 		state.selectSrc(2)
 		state.selectDst(1)
-		expect(state.selectedSrc).toBeUndefined()
+		expect(state.selectedSrc).toBe(2)
 		expect(state.active).toBe('dst')
-		expect(state.isDstSelected(1, false)).toBe(true)
-		expect(state.isDstSelected(0, false)).toBe(false)
+		expect(state.isDstSelected(1)).toBe(true)
+		expect(state.isDstSelected(0)).toBe(false)
 	})
 
 	it('highlights the source routed to the selected destination', () => {
@@ -44,14 +44,16 @@ describe('RouterState selection', () => {
 		expect(state.isRoutedDst(0)).toBe(false)
 	})
 
-	it('blinks the half of the pair that is not the active selection', () => {
+	it('keeps both ends of the pair, whichever is selected first', () => {
 		const state = routerWith()
-		state.selectDst(1)
 		state.selectSrc(3)
-		expect(state.hasPair).toBe(true)
-		expect(state.isSrcSelected(3, false)).toBe(true)
-		expect(state.isDstSelected(1, false)).toBe(false)
-		expect(state.isDstSelected(1, true)).toBe(true)
+		state.selectDst(1)
+		expect(state.isSrcSelected(3)).toBe(true)
+		expect(state.isDstSelected(1)).toBe(true)
+		state.selectDst(2)
+		expect(state.isSrcSelected(3)).toBe(true)
+		expect(state.isDstSelected(1)).toBe(false)
+		expect(state.isDstSelected(2)).toBe(true)
 	})
 
 	it('clearing the selection resets everything', () => {
@@ -59,9 +61,23 @@ describe('RouterState selection', () => {
 		state.selectDst(1)
 		state.selectSrc(3)
 		state.clearSelection()
-		expect(state.hasPair).toBe(false)
 		expect(state.active).toBeUndefined()
 		expect(state.selectedDstSrc).toBeUndefined()
+	})
+
+	it('expects a cut to be refused when locked for all, or for others by another unit', () => {
+		const state = routerWith()
+		state.routerId = '15'
+		expect(state.refusesCut(0)).toBe(false)
+		state.locks.set(0, 1)
+		state.lockOwners.set(0, '15')
+		expect(state.refusesCut(0)).toBe(true)
+		state.locks.set(0, 2)
+		expect(state.refusesCut(0)).toBe(false)
+		state.lockOwners.set(0, '20')
+		expect(state.refusesCut(0)).toBe(true)
+		state.locks.set(0, 0)
+		expect(state.refusesCut(0)).toBe(false)
 	})
 
 	it('treats any lock mode above zero as locked', () => {
@@ -90,9 +106,28 @@ describe('RouterState selection', () => {
 	})
 })
 
+describe('pendingSrc', () => {
+	it('is the staged source only while it differs from the routed one', () => {
+		const state = routerWith()
+		state.routes.set(1, 3)
+		expect(state.pendingSrc(1)).toBeUndefined()
+		state.presets.set(1, 2)
+		expect(state.pendingSrc(1)).toBe(2)
+		state.routes.set(1, 2)
+		expect(state.pendingSrc(1)).toBeUndefined()
+	})
+})
+
 describe('selectionValues', () => {
-	it('is all null with nothing selected', () => {
-		const values = selectionValues(routerWith())
+	it('is null, apart from the lock button text, with nothing selected', () => {
+		const {
+			selected_dst_lock_text: lockText,
+			selected_dst_label: dstLabel,
+			selected_src_label: srcLabel,
+			...values
+		} = selectionValues(routerWith())
+		expect(lockText).toBe('[UN]LOCK\nDST')
+		expect([dstLabel, srcLabel]).toEqual(['DST', 'SRC'])
 		expect(Object.values(values).every((v) => v === null)).toBe(true)
 	})
 
@@ -101,6 +136,12 @@ describe('selectionValues', () => {
 		state.selectDst(1)
 		expect(selectionValues(state)).toEqual({
 			selected_dst_id: '01',
+			selected_dst_lock_action: 'LOCK',
+			selected_dst_preset_src_id: null,
+			selected_dst_preset_src_name: null,
+			selected_dst_lock_text: 'LOCK\nMON1',
+			selected_dst_label: 'MON1',
+			selected_src_label: 'SRC',
 			selected_dst_name: 'MON1',
 			selected_dst_src_id: '03',
 			selected_dst_src_name: 'CAM3',
