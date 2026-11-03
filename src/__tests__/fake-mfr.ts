@@ -11,14 +11,19 @@
  * - `W:` answers directly, then pushes one `W!` line per level to every connected client
  * - routes staged with `P:` belong to the connection that staged them
  * - a cut to a destination locked with mode 1 is refused
+ * - a salvo leaves a locked destination's route alone and still drops its staged route
+ * - a name written with `K:` loses its non-ASCII bytes and is kept to 16 characters
  * - more connections than `maxClients` are reset (the limit of 2 is inferred, not documented)
  *
- * Where the measurements say nothing (several routes taken in one salvo, a salvo that includes a
- * locked destination, names), the behaviour here is a best guess and the tests don't rely on it.
+ * Where the measurements say nothing (several routes taken in one salvo), the behaviour here is
+ * a best guess and the tests don't rely on it.
  */
 import net from 'node:net'
 import { setImmediate as nextTurn } from 'node:timers/promises'
 import { performance } from 'node:perf_hooks'
+
+/** Longest name the measured router kept, whatever the protocol's 128 byte limit allows */
+const MAX_STORED_NAME = 16
 
 const LEVEL_COUNT = 8
 const NAMES_PER_BLOCK = 32
@@ -413,7 +418,8 @@ export class FakeMfr {
 
 		if ((m = /^K:([SD])[SLA]([0-9A-F]{1,3}),([0-9A-F]*)$/i.exec(command))) {
 			const index = parseInt(m[2], 16)
-			const name = Buffer.from(m[3], 'hex').toString('latin1')
+			const bytes = Buffer.from(m[3], 'hex').filter((byte) => byte < 0x80)
+			const name = Buffer.from(bytes).subarray(0, MAX_STORED_NAME).toString('latin1')
 			this.setName(m[1].toUpperCase() === 'S' ? 'src' : 'dst', index, name)
 			return plain
 		}

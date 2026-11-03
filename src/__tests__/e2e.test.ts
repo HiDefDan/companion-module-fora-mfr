@@ -460,6 +460,21 @@ describe('ModuleInstance against the fake router over TCP', () => {
 			expect(m.state.presets.size).toBe(0)
 		})
 
+		it('leaves a locked destination alone in a salvo and clears its staged route', async () => {
+			const m = await startModule()
+			m.routeExplicit('preset', '07', '14')
+			await settle()
+			m.lockDestination('07', '1')
+			await until(() => m.state.locks.get(7) === 1, 'the lock to reach the module')
+			await settle()
+			;(m.setVariableValues as Mock).mockClear()
+			m.cutPresets()
+			await settle()
+			expect(router.route('0', 7)).toBe(8)
+			expect(m.state.presets.size).toBe(0)
+			expect(m.setVariableValues).toHaveBeenCalledWith(expect.objectContaining({ xpt08_pending_name: '' }))
+		})
+
 		it('does not cut a destination it knows is locked', async () => {
 			const m = await startModule()
 			const panel = await router.connectClient()
@@ -607,7 +622,7 @@ describe('ModuleInstance against the fake router over TCP', () => {
 		it('reads a renamed source back from the router after reconnecting', async () => {
 			const m = await startModule()
 			m.rename('src', '03', 'CAM 4')
-			await until(() => sent().at(-1) === '@ K:SA003,43414D2034')
+			await until(() => sent().includes('@ K:SA003,43414D2034'))
 			await settle()
 			expect(router.srcNames[3]).toBe('CAM 4')
 			router.dropClients()
@@ -620,20 +635,26 @@ describe('ModuleInstance against the fake router over TCP', () => {
 			expect(m.state.srcName(4)).toBe('VTR')
 		})
 
-		// Names are written as UTF-8 (encodeName) but read back as latin1 (decodeName), so a
-		// non-ASCII name changes once it has been through the router. Which encoding the router
-		// itself uses is not known, so this is flagged rather than fixed.
-		it.fails('keeps a non-ASCII name after reading it back from the router', async () => {
+		it('shows what the router kept when it drops non-ASCII characters, and warns', async () => {
 			const m = await startModule()
 			m.rename('src', '03', 'Café')
-			await until(() => sent().at(-1)?.startsWith('@ K:SA003,') === true)
-			await settle()
-			router.dropClients()
-			await until(() => !socket().isConnected)
-			vi.advanceTimersByTime(2000)
-			await until(() => socket().isConnected && sent().at(-1) === '@ W?0,27', 'the startup reads')
-			await settle()
-			expect(m.state.srcName(3)).toBe('Café')
+			await until(() => m.state.srcName(3) === 'Caf', 'the name to be read back')
+			expect(router.srcNames[3]).toBe('Caf')
+			expect(m.log).toHaveBeenCalledWith('warn', expect.stringContaining('stored "Café" as "Caf"'))
+		})
+
+		it('shows what the router kept when it shortens a long name, and warns', async () => {
+			const m = await startModule()
+			m.rename('dst', '02', 'A very long studio name')
+			await until(() => m.state.dstName(2) === 'A very long stud', 'the name to be read back')
+			expect(m.log).toHaveBeenCalledWith('warn', expect.stringContaining('stored'))
+		})
+
+		it('does not warn when the router keeps the name as sent', async () => {
+			const m = await startModule()
+			m.rename('dst', '02', 'MON 3')
+			await until(() => m.state.dstName(2) === 'MON 3', 'the name to be read back')
+			expect(m.log).not.toHaveBeenCalledWith('warn', expect.stringContaining('stored'))
 		})
 	})
 })

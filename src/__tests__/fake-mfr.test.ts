@@ -116,6 +116,14 @@ describe('FakeMfr matches the bytes measured on a real router', () => {
 		expect(await client.request('@ K?SA,040')).toBe('@ K?SA,040\r\r\n>')
 	})
 
+	it('drops non-ASCII bytes from an imported name and keeps 16 characters', async () => {
+		const hexOf = (bytes: string): string => Buffer.from(bytes, 'latin1').toString('hex').toUpperCase()
+		expect(await client.request('@ K:DA007,53C3BC6420C3A9')).toBe('@ K:DA007,53C3BC6420C3A9\r\r\n>')
+		expect(await client.request('@ K?DA,007')).toContain('K:DA007,536420\r\n')
+		await client.request(`@ K:DA007,${hexOf('ABCDEFGHIJKLMNOPQRST')}`)
+		expect(await client.request('@ K?DA,007')).toContain(`K:DA007,${hexOf('ABCDEFGHIJKLMNOP')}\r\n`)
+	})
+
 	it('resets a third connection while two are open', async () => {
 		const second = await router.connectClient()
 		const third = new RawClient(router)
@@ -129,6 +137,8 @@ describe('FakeMfr matches the bytes measured on a real router', () => {
 
 	it('takes a third connection once one of two closes', async () => {
 		const second = await router.connectClient()
+		// a client's connect can fire before the server has accepted it
+		await until(() => router.openConnections.length === 2)
 		second.close()
 		await until(() => router.openConnections.length === 1)
 		const third = await router.connectClient()
