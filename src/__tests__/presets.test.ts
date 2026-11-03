@@ -1,0 +1,63 @@
+import { describe, expect, it, vi } from 'vitest'
+import type ModuleInstance from '../main.js'
+import { UpdatePresets } from '../presets.js'
+import { RouterState } from '../state.js'
+
+function build(dstCount: number, srcCount: number): Record<string, any> {
+	const state = new RouterState()
+	state.setSize(dstCount, srcCount)
+	const setPresetDefinitions = vi.fn()
+	UpdatePresets({ state, setPresetDefinitions } as unknown as ModuleInstance)
+	return setPresetDefinitions.mock.calls[0][1] as Record<string, any>
+}
+
+describe('presets', () => {
+	it('offers a layered stacked destination button with a plain text fallback under one id', () => {
+		const presets = build(2, 2)
+		const routed = presets.routed_1
+		expect(routed.type).toBe('alternatives')
+		const [layered, simple] = routed.variants
+		expect(layered.type).toBe('layered')
+		expect(simple.type).toBe('simple')
+
+		// the arrow and staged source are hidden until a route is staged for the destination
+		const hidden = layered.elements.filter((e: any) => e.enabled === false).map((e: any) => e.id)
+		expect(hidden).toEqual(['arrow', 'pending'])
+		const staged = layered.feedbacks.find((f: any) => f.feedbackId === 'PresetDestination')
+		expect(staged.options).toEqual({ dst: '01' })
+		expect(staged.styleOverrides).toEqual(
+			expect.arrayContaining([
+				{ elementId: 'arrow', elementProperty: 'enabled', override: true },
+				{ elementId: 'pending', elementProperty: 'enabled', override: true },
+			]),
+		)
+		// every override points at an element that exists
+		const ids = new Set(layered.elements.map((e: any) => e.id))
+		for (const feedback of layered.feedbacks) {
+			for (const o of feedback.styleOverrides) expect(ids.has(o.elementId)).toBe(true)
+		}
+	})
+
+	it('keeps stable preset ids', () => {
+		const presets = build(2, 3)
+		expect(Object.keys(presets).sort()).toEqual(
+			[
+				'blank',
+				'cut_xpt',
+				'preset_xpt',
+				'switch_preset_xpts',
+				'clear_preset_xpts',
+				'lock_dst',
+				'rename_dst',
+				'rename_src',
+				'dst_0',
+				'dst_1',
+				'routed_0',
+				'routed_1',
+				'src_0',
+				'src_1',
+				'src_2',
+			].sort(),
+		)
+	})
+})
