@@ -5,7 +5,7 @@ All notable changes to this module are documented here. The format follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html), and entries are grouped by the
 [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/) type of the change.
 
-## [2.0.0] - Unreleased
+## [2.0.0] - 2026-11-04
 
 A rewrite in TypeScript for Companion 5, built against and tested on Companion 5.1.1. Earlier versions of Companion have
 not been tested, and the only router it has been tested with is an MFR-3000. The ids of v1's actions, feedbacks and connection settings are unchanged
