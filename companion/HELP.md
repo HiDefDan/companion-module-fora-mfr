@@ -1,83 +1,102 @@
-## VARIABLES
+Version 2.0.0 is built against and tested on Companion 5.1.1. Earlier versions of Companion have not been tested. It has only been tested with an MFR-3000 router.
 
-    * Implemented
-        -   outputs ( available destinations )
-        -   inputs ( available sources )
-        -   level ( router crosspoint level )
-        -   id ( router unit ID )
-        -   dst## ( the ascii name assigned to each available destination )
-        -   src## ( the ascii name assigned to each available source )
-        -   selected_dst_name ( for bank labelling and feedback )
-        -   selected_dst_id ( used for actions requiring hex id of port of destination )
-        -   selected_src_name ( for bank labelling and feedback )
-        -   selected_src_id ( used for actions requiring hex id of port of destination )
-        -   video_format ( format of video processed by router )
-        -   video_reference ( auto | blackburst | tri-level )
-        -   switching_point ( field | odd | even )
+## SETUP
 
+In the router's web interface (System Settings > Router System Settings > Port Settings):
+
+- In the TCP/IP section set "Default Function" to "Crosspoint remote control 2"
+- In the Command Response section make sure that Echo, C and S responses are checked
+- Send changes in order to save them to the system
+
+The module sends one command at a time and waits for the router's prompt before sending the next, as the router requires. If no prompt arrives it moves on after 1 second, or 5 seconds for commands with long replies.
+
+## HOW IT WORKS
+
+Select a destination and a source, in either order, then press a cut or stage button. The pair stays selected until you cut. A steady green source is the one routed to the selected destination now; a flashing one is the next source, which a cut or stage would route.
+
+To build a salvo (a soft macro) of several routes: select a source, then a destination, and press STAGE; the pair stays on show, and each further destination you press and STAGE is added with the same source. Pressing a source starts a new pair. Set "When a destination and a source are both selected" to "Stage straight away" in the connection settings to drop the STAGE press entirely. Destinations showing a staged route show the staged source on their own line and turn orange. The salvo switch button flashes while routes are staged: press it to take them all at once, or clear staged to discard them. The module learns the router's size, port names, crosspoints, staged routes and destination locks on connect, and re-reads the crosspoints, staged routes and port names every few seconds (see the refresh setting) so changes made elsewhere show up. If a command gets no reply for 6 seconds the module reconnects, and keeps trying every 5 seconds until the router returns. Staged routes belong to a connection, so a reconnect loses them. A cut to a locked destination is refused: the module logs a warning and keeps the selection and any staged route. Staged routes belong to the connection that made them: routes staged from a panel or another client are not visible to this module, and it can only take or clear its own. The router's manual calls a staged route a "preset crosspoint".
+
+The router's lowest level that responds to a system size request is the one controlled.
+
+## LOG
+
+The connection's log shows what the module found on connecting, reconnects, the auto-route mode, and routes and names changed from elsewhere. At debug level it also shows each operator command, any command that got no prompt, and any line from the router it didn't recognise, which is useful on a model other than the MFR-3000. Routine refreshes are not logged.
+
+## RECORDING A MACRO
+
+The module supports Companion's action recording. On a button, use the learn (record) option on the action list, then press your source and destination buttons and the salvo switch as you normally would. Each staged or cut route is added as a "Stage a route" or "Cut a route" action, and the salvo switch as "Switch staged crosspoint(s)". Staging the same destination again before a take replaces its earlier action; everything else is kept in the order you did it, including several salvos and clears. Stop recording and the button now repeats that salvo in one press.
+
+Companion's own recording controls are internal actions, which module presets cannot contain, so set up three buttons on a page (the blank module-style preset makes a good macro button):
+
+- A record toggle with the internal actions "Action recorder: set connections" (this connection) then "Action recorder: set recording" (toggle), and the internal "Action recorder: check connections" feedback in state "recording" to light it while recording.
+- A button with the internal action "Action recorder: save to button", pointing at the macro button to record onto, to save what was recorded.
+- The macro button itself.
+
+Add the salvo switch button press before you stop recording if you want the macro to take the routes as well as stage them.
+
+## VARIABLES
+
+- `id` router unit ID (from the active CPU)
+- `level` crosspoint level in use
+- `outputs`, `inputs` number of destinations and sources
+- `dst##` name of each destination
+- `src##` name of each source
+- `xpt##` hex id of the source routed to each destination
+- `xpt##_name` name of the source routed to each destination
+- `dst##_locked` lock mode of each destination (0 unlocked, 1 locked, 2 locked by others)
+- `auto_route_mode` what happens when a destination and a source are both selected: OFF, STAGE or CUT
+- `selected_dst_id`, `selected_dst_name` the selected destination
+- `selected_dst_src_id`, `selected_dst_src_name` the source routed to the selected destination
+- `selected_src_id`, `selected_src_name` the selected source
+- `selected_dst_label`, `selected_src_label` the selected names, or `DST` / `SRC` while nothing is selected (used by the cut and stage buttons)
+- `selected_dst_preset_src_id`, `selected_dst_preset_src_name` the source staged for the selected destination
+- `selected_dst_lock_action`, `selected_dst_lock_text` what pressing the lock button will do (LOCK or UNLOCK) and ready made button text
+- `active_selected_id`, `active_selected_name`, `active_selected_type` the most recent selection (`src` or `dst`)
+
+Selection variables are empty when nothing is selected, and are cleared after a cut.
+
+## PORT NAMES
+
+To edit many names at once, open `/instance/<connection label>/` at Companion's web address, for example `http://127.0.0.1:8000/instance/fora-mfr/`. The table shows each port's name on the router, read at every refresh, so a name changed elsewhere appears within the refresh interval (see the refresh setting; with it off, only after a reconnect). Destinations and sources fold away separately, and a folded section still shows how many changes it has waiting. Type in the New name column or paste into it, then press Apply. Nothing reaches the router until you do, and one bad row sends nothing.
+
+- Paste a column of names to fill downward from the cell you paste into, stopping at the end of that section, or lines such as `DST 1 = Main Mon` or two spreadsheet columns (`DST 1`, then the name) to go to their own ports.
+- After Apply each row shows Saved, what the router kept if it changed the name (an MFR tested kept 16 ASCII characters), or No reply.
+- Revert last Apply fills the old names back in, for you to Apply. Copy all copies every port and name, to paste into a spreadsheet.
+- Anyone who can open Companion's web address can open this page.
 
 ## ACTIONS
 
-    * Implemented
-        >   Router config
-            -   Preset video format
-            -   Apply preset video format
-            -   Cancel preset video format
-            -   rename a dst or src. Needs to account for updating 'selected' variable values if renamed item matches selections
-        >   Switching operation
-            -   Set destination
-            -   Set source
-            -   Switch crosspoint
-            -   Preset crosspoint
-            -   Switch preset crosspoint(s)
-            -   lock / unlock dst
-    * ToDo (?)
-        >   Switching operation
-            -   reinitialize unit ( advise caution )
+- Set destination / Set source: make a selection
+- Cut selected source to selected destination
+- Stage selected source to selected destination
+- Switch staged crosspoint(s): perform all staged crosspoints together
+- Stage a route / Cut a route: stage or cut one explicit source to destination pair, without using the selection
+- Clear staged crosspoint(s): discard all staged routes
+- Set auto-route mode: off, stage, cut or the next of these. It is saved in the connection settings, and applies from the next selection, so a pair already selected is not routed by changing the mode
+- Preset video format (format, reference and switching point, each of which can be "Use the connection default" set in the connection settings), optionally applied straight away; Apply and Cancel preset video format. These are actions only, with no preset buttons: the router restarts when a new format is accepted and cannot report its current format, so there is no feedback and a stray press is costly.
+- Rename a destination or source. The router may shorten a name or drop characters (an MFR tested kept 16 ASCII characters), so the module shows what it reports back and logs a warning if it differs
+- Lock / unlock a destination, or toggle the lock of the selected destination
 
+Operator actions are sent ahead of the module's own startup reads, but never interrupt a command already waiting for its prompt.
 
 ## FEEDBACKS
 
-    * Implemented
-        - Routed destination ( true if selected source is routed to this destination xpt - blinbks if selected destination is not routed to selected source)
-        - Selected destination ( true if this destination is currently selected/pressed)
-        - Locked destination ( true if this destination is locked )
-        - Routed source ( true if this source is routed to the selected destination xpt )
-        - Selected source ( true if this source is currently selected/pressed)
-                       
-    * ToDo
-        - general improvements - not particularly happy with certain behaviours but it's good enough for now 
+- Selected destination / Selected source: this port is selected. A selected source flashes while it is the next source for the selected destination
+- Routed source: this source is routed to the selected destination
+- Routed destination: this destination carries the selected source
+- Staged destination / Staged source: a route is staged for this destination, or this source is staged for the selected destination
+- Locked destination: this destination is locked
+- Auto-route mode: the auto-route mode is the one chosen
+- Staged routes waiting: flashes while routes are staged and have not been taken
 
 ## PRESETS
 
-    * Implemented
-        > Control
-            - Cut selected src to selected dst (shows selection values)
-            - Preset xpt with selected src and dst (shows selection values)
-            - Cut all preset xpts
-            - Preset video format
-            - Apply preset video format
-            - Cancel preset video format
-            - Rename destination
-            - Rename source
-            - Lock / unlock destination
-        > Destinations
-            - Preset for each available destination with the following properties;
-                > Actions
-                    - select destination
-                > Feedbacks
-                    - Routed destination ( true if selected source is routed to this destination xpt - blinbks if selected destination is not routed to selected source)
-                    - Selected destination ( true if this destination is currently selected/pressed)
-                    - Locked destination ( true if this destination is locked )
-        > Source
-             - Preset for each available source with the following properties;
-                > Actions
-                    - select source
-                > Feedbacks
-                    - Routed source ( true if this source is routed to the selected destination xpt )
-                    - Selected source ( true if this source is currently selected/pressed)
-    * ToDo
+- Control: a blank button in the module style, cut, stage, salvo switch, clear staged, lock toggle and auto-route mode buttons. Convert the blank button to a normal button after placing it, so you can add your own actions. The auto-route mode button steps through off, stage (orange) and cut (red: each selection goes live)
+- Destinations: a button per destination with select, routed, selected, staged and locked feedback. Destination and source buttons also light up for as long as they are held, which confirms a press in cut straight away mode, where the selection clears at once
+- Destinations showing their routed source: a button per destination whose text shows the source currently routed to it, updated live, with a staged route shown beneath it
+- Sources: a button per source with select, routed and selected feedback
 
+Not implemented: reinitialize unit, reading back the video format, "lock others" mode.
 
 ## COMMAND REFERENCE
 
@@ -86,7 +105,7 @@
      * Basic specification
          -   Port number 49152 - 65534 (default : 23)
          -   Maximum clients : 16
-         -   Wait for Echo before sending next command
+         -   Wait for the prompt, and all reply messages, before sending next command
          -   No password required
 
 ## Commands available by connecting using LAN
@@ -186,7 +205,7 @@ If "Crosspoint remote control 2" is not enabled some functionality is not availa
 
         - Control command   =>  @[sp]A?
         - Command response
-            If CPU is active:   <=  @[sp]A:<ID>
+            If CPU is active:   <=  A:<ID>
             If CPU is passive:  <= (no response)
 
 9.  Commands (W?) for requesting Destination Lock status.
