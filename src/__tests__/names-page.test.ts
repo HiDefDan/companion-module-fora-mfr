@@ -1,14 +1,14 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, vi, type Mock } from 'vitest'
 import type { CompanionHTTPRequest } from '@companion-module/base'
 import { handleNamesRequest, type NamesHost } from '../names-page.js'
 import { RouterState } from '../state.js'
 
-function setup(connected = true): NamesHost & { rename: ReturnType<typeof vi.fn>; log: ReturnType<typeof vi.fn> } {
+function setup(connected = true): NamesHost & { rename: Mock<NamesHost['rename']>; log: Mock<NamesHost['log']> } {
 	const state = new RouterState()
 	state.setSize(2, 3)
 	state.setName('dst', 0, 'MON 1')
 	state.setName('src', 2, 'CAM <3>')
-	return { state, connected, rename: vi.fn(), log: vi.fn() }
+	return { state, connected, rename: vi.fn<NamesHost['rename']>(), log: vi.fn<NamesHost['log']>() }
 }
 
 function request(method: string, path: string, body?: unknown, headers = {}): CompanionHTTPRequest {
