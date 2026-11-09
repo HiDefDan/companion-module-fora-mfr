@@ -1,6 +1,6 @@
-import { AUTO_ROUTE_MODES, destinationChoices, sourceChoices } from './choices.js'
+import { AUTO_ROUTE_MODES, destinationChoices, portDropdown, sourceChoices } from './choices.js'
 import type ModuleInstance from './main.js'
-import { parseHex } from './protocol.js'
+import { parsePort } from './protocol.js'
 
 export const SELECTION_FEEDBACKS = [
 	'SelectedSource',
@@ -35,9 +35,9 @@ export function UpdateFeedbacks(self: ModuleInstance): void {
 			description:
 				'If this source is selected the button will be highlighted irrespective of routing. It flashes while it is the next source for the selected destination.',
 			defaultStyle: { bgcolor: 0x00ff00, color: 0x000000 },
-			options: [{ type: 'dropdown', id: 'src', label: 'Source :', default: '00', choices: src }],
+			options: [portDropdown('src', 'Source :', src)],
 			callback: (feedback) => {
-				const port = parseHex(feedback.options.src)
+				const port = parsePort(feedback.options.src)
 				if (port === undefined || !state.isSrcSelected(port)) return false
 				return port !== state.nextSrc || state.flashOn
 			},
@@ -47,9 +47,9 @@ export function UpdateFeedbacks(self: ModuleInstance): void {
 			type: 'boolean',
 			description: 'If this destination is selected the button will be highlighted irrespective of routing',
 			defaultStyle: { bgcolor: 0xff0000, color: 0x000000 },
-			options: [{ type: 'dropdown', id: 'dst', label: 'Destination :', default: '00', choices: dst }],
+			options: [portDropdown('dst', 'Destination :', dst)],
 			callback: (feedback) => {
-				const port = parseHex(feedback.options.dst)
+				const port = parsePort(feedback.options.dst)
 				return port !== undefined && state.isDstSelected(port)
 			},
 		},
@@ -58,9 +58,9 @@ export function UpdateFeedbacks(self: ModuleInstance): void {
 			type: 'boolean',
 			description: 'True if this source is routed to the selected destination',
 			defaultStyle: { bgcolor: 0x00ff00, color: 0x000000 },
-			options: [{ type: 'dropdown', id: 'src', label: 'Source :', default: '00', choices: src }],
+			options: [portDropdown('src', 'Source :', src)],
 			callback: (feedback) => {
-				const port = parseHex(feedback.options.src)
+				const port = parsePort(feedback.options.src)
 				return port !== undefined && state.isRoutedSrc(port)
 			},
 		},
@@ -69,9 +69,9 @@ export function UpdateFeedbacks(self: ModuleInstance): void {
 			type: 'boolean',
 			description: 'True if the selected source is routed to this destination',
 			defaultStyle: { bgcolor: 0xff0000, color: 0x000000 },
-			options: [{ type: 'dropdown', id: 'dst', label: 'Destination :', default: '00', choices: dst }],
+			options: [portDropdown('dst', 'Destination :', dst)],
 			callback: (feedback) => {
-				const port = parseHex(feedback.options.dst)
+				const port = parsePort(feedback.options.dst)
 				return port !== undefined && state.isRoutedDst(port)
 			},
 		},
@@ -80,9 +80,9 @@ export function UpdateFeedbacks(self: ModuleInstance): void {
 			type: 'boolean',
 			description: 'True if this source is staged for the selected destination',
 			defaultStyle: { bgcolor: 0xff8000, color: 0x000000 },
-			options: [{ type: 'dropdown', id: 'src', label: 'Source :', default: '00', choices: src }],
+			options: [portDropdown('src', 'Source :', src)],
 			callback: (feedback) => {
-				const port = parseHex(feedback.options.src)
+				const port = parsePort(feedback.options.src)
 				return port !== undefined && state.selectedDst !== undefined && state.pendingSrc(state.selectedDst) === port
 			},
 		},
@@ -91,9 +91,9 @@ export function UpdateFeedbacks(self: ModuleInstance): void {
 			type: 'boolean',
 			description: 'True if a route is staged for this destination and has not been taken yet',
 			defaultStyle: { bgcolor: 0xff8000, color: 0x000000 },
-			options: [{ type: 'dropdown', id: 'dst', label: 'Destination :', default: '00', choices: dst }],
+			options: [portDropdown('dst', 'Destination :', dst)],
 			callback: (feedback) => {
-				const port = parseHex(feedback.options.dst)
+				const port = parsePort(feedback.options.dst)
 				return port !== undefined && state.pendingSrc(port) !== undefined
 			},
 		},
@@ -102,9 +102,9 @@ export function UpdateFeedbacks(self: ModuleInstance): void {
 			type: 'boolean',
 			description: 'True if this destination is locked',
 			defaultStyle: { bgcolor: 0x800000, color: 0x000000 },
-			options: [{ type: 'dropdown', id: 'dst', label: 'Destination :', default: '00', choices: dst }],
+			options: [portDropdown('dst', 'Destination :', dst)],
 			callback: (feedback) => {
-				const port = parseHex(feedback.options.dst)
+				const port = parsePort(feedback.options.dst)
 				return port !== undefined && state.isLocked(port)
 			},
 		},

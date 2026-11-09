@@ -3,12 +3,15 @@ import type { CompanionHTTPRequest } from '@companion-module/base'
 import { handleNamesRequest, type NamesHost } from '../names-page.js'
 import { RouterState } from '../state.js'
 
-function setup(connected = true): NamesHost & { rename: Mock<NamesHost['rename']>; log: Mock<NamesHost['log']> } {
+function setup(
+	connected = true,
+	queueSpace = 1024,
+): NamesHost & { rename: Mock<NamesHost['rename']>; log: Mock<NamesHost['log']> } {
 	const state = new RouterState()
 	state.setSize(2, 3)
 	state.setName('dst', 0, 'MON 1')
 	state.setName('src', 2, 'CAM <3>')
-	return { state, connected, rename: vi.fn<NamesHost['rename']>(), log: vi.fn<NamesHost['log']>() }
+	return { state, connected, queueSpace, rename: vi.fn<NamesHost['rename']>(), log: vi.fn<NamesHost['log']>() }
 }
 
 function request(method: string, path: string, body?: unknown, headers = {}): CompanionHTTPRequest {
@@ -52,7 +55,7 @@ describe('the port names page', () => {
 		})
 	})
 
-	it('renames by the port number people see, sending the hex id the module uses', () => {
+	it('renames by the port number people see, passing that number to the module', () => {
 		const host = setup()
 		const response = post(host, [
 			{ kind: 'dst', port: 2, name: 'MON 2' },
@@ -61,8 +64,8 @@ describe('the port names page', () => {
 		expect(response.status).toBe(200)
 		expect(JSON.parse(response.body!)).toEqual({ sent: 2 })
 		expect(host.rename.mock.calls).toEqual([
-			['dst', '01', 'MON 2'],
-			['src', '00', 'CAM 1'],
+			['dst', '2', 'MON 2'],
+			['src', '1', 'CAM 1'],
 		])
 	})
 
@@ -71,7 +74,7 @@ describe('the port names page', () => {
 		const changes = [{ kind: 'dst', port: 1, name: 'MON' }]
 		const parsed = { ...request('POST', '/names'), body: { changes } as unknown as string }
 		expect(handleNamesRequest(host, parsed).status).toBe(200)
-		expect(host.rename).toHaveBeenCalledWith('dst', '00', 'MON')
+		expect(host.rename).toHaveBeenCalledWith('dst', '1', 'MON')
 		const empty = { ...request('POST', '/names'), body: undefined }
 		expect(handleNamesRequest(host, empty).status).toBe(400)
 	})
@@ -110,6 +113,22 @@ describe('the port names page', () => {
 		expect(handleNamesRequest(host, request('POST', '/names', 'not json')).status).toBe(400)
 		expect(handleNamesRequest(host, request('POST', '/names', { changes: 'x' })).status).toBe(400)
 		expect(host.rename).not.toHaveBeenCalled()
+	})
+
+	it('sends nothing when the module cannot queue every rename and its read-back', () => {
+		const host = setup(true, 3)
+		const res = post(host, [
+			{ kind: 'dst', port: 1, name: 'A' },
+			{ kind: 'src', port: 1, name: 'B' },
+		])
+		expect(res.status).toBe(503)
+		expect(host.rename).not.toHaveBeenCalled()
+		expect(
+			post(setup(true, 4), [
+				{ kind: 'dst', port: 1, name: 'A' },
+				{ kind: 'src', port: 1, name: 'B' },
+			]).status,
+		).toBe(200)
 	})
 
 	it('sends nothing while disconnected', () => {

@@ -41,7 +41,7 @@ Add the salvo switch button press before you stop recording if you want the macr
 - `outputs`, `inputs` number of destinations and sources
 - `dst##` name of each destination
 - `src##` name of each source
-- `xpt##` hex id of the source routed to each destination
+- `xpt##` port number of the source routed to each destination
 - `xpt##_name` name of the source routed to each destination
 - `dst##_locked` lock mode of each destination (0 unlocked, 1 locked, 2 locked by others)
 - `auto_route_mode` what happens when a destination and a source are both selected: OFF, STAGE or CUT
@@ -76,6 +76,8 @@ To edit many names at once, open `/instance/<connection label>/` at Companion's 
 - Preset video format (format, reference and switching point, each of which can be "Use the connection default" set in the connection settings), optionally applied straight away; Apply and Cancel preset video format. These are actions only, with no preset buttons: the router restarts when a new format is accepted and cannot report its current format, so there is no feedback and a stray press is costly.
 - Rename a destination or source. The router may shorten a name or drop characters (an MFR tested kept 16 ASCII characters), so the module shows what it reports back and logs a warning if it differs
 - Lock / unlock a destination, or toggle the lock of the selected destination
+
+A destination or source option switched to an expression takes the port number shown in the list, so `11` is port 11. The `selected_dst_id`, `selected_src_id` and `xpt##` variables hold the same number, so they can be used there as they are.
 
 Operator actions are sent ahead of the module's own startup reads, but never interrupt a command already waiting for its prompt.
 
