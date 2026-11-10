@@ -121,7 +121,16 @@ export function UpdateFeedbacks(self: ModuleInstance): void {
 			type: 'boolean',
 			description: 'True if the auto-route mode is this one',
 			defaultStyle: { bgcolor: 0xff0000, color: 0x000000 },
-			options: [{ type: 'dropdown', id: 'mode', label: 'Mode :', default: 'cut', choices: AUTO_ROUTE_MODES }],
+			options: [
+				{
+					type: 'dropdown',
+					id: 'mode',
+					label: 'Mode :',
+					default: 'cut',
+					choices: AUTO_ROUTE_MODES,
+					disableAutoExpression: true,
+				},
+			],
 			callback: (feedback) => feedback.options.mode === self.autoRouteMode,
 		},
 	})

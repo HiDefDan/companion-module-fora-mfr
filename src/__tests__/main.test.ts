@@ -203,6 +203,28 @@ describe('ModuleInstance against a simulated router', () => {
 		expect(latest).not.toHaveProperty('src09')
 	})
 
+	it('only offers expressions on the port options, of the dropdowns with fixed lists', () => {
+		type Definitions = Record<string, { options: { id: string; disableAutoExpression?: boolean }[] }>
+		const latest = (setter: unknown): Definitions =>
+			(setter as ReturnType<typeof vi.fn>).mock.lastCall?.[0] as Definitions
+		const actions = latest(module.setActionDefinitions)
+		const feedbacks = latest(module.setFeedbackDefinitions)
+		const option = (definition: { options: { id: string; disableAutoExpression?: boolean }[] }, id: string) =>
+			definition.options.find((candidate) => candidate.id === id)
+
+		for (const [definition, id] of [
+			[actions.setAutoRoute, 'mode'],
+			[actions.setVideoFormat, 'format'],
+			[actions.setVideoFormat, 'ref'],
+			[actions.setVideoFormat, 'point'],
+			[actions.lockDst, 'mode'],
+			[feedbacks.AutoRouteMode, 'mode'],
+		] as const) {
+			expect(option(definition, id)?.disableAutoExpression).toBe(true)
+		}
+		expect(option(actions.lockDst, 'dst')?.disableAutoExpression).toBeUndefined()
+	})
+
 	it('applies names, routes and locks as they arrive, and rebuilds dropdowns once names settle', () => {
 		startUp()
 		const actions = module.setActionDefinitions as unknown as ReturnType<typeof vi.fn>

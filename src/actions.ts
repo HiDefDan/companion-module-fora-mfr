@@ -88,6 +88,7 @@ export function UpdateActions(self: ModuleInstance): void {
 					label: 'Mode :',
 					default: NEXT_AUTO_ROUTE,
 					choices: [{ id: NEXT_AUTO_ROUTE, label: 'Next mode (off, stage, cut, off)' }, ...AUTO_ROUTE_MODES],
+					disableAutoExpression: true,
 				},
 			],
 			callback: (action) => self.setAutoRouteMode(action.options.mode),
@@ -101,6 +102,7 @@ export function UpdateActions(self: ModuleInstance): void {
 					label: 'Set video format :',
 					default: USE_DEFAULT,
 					choices: VIDEO_FORMAT_CHOICES,
+					disableAutoExpression: true,
 				},
 				{
 					type: 'dropdown',
@@ -108,6 +110,7 @@ export function UpdateActions(self: ModuleInstance): void {
 					label: 'Set reference type :',
 					default: USE_DEFAULT,
 					choices: REFERENCE_CHOICES,
+					disableAutoExpression: true,
 				},
 				{
 					type: 'dropdown',
@@ -115,6 +118,7 @@ export function UpdateActions(self: ModuleInstance): void {
 					label: 'Set switching point :',
 					default: USE_DEFAULT,
 					choices: SWITCHING_POINT_CHOICES,
+					disableAutoExpression: true,
 				},
 				{
 					type: 'checkbox',
@@ -169,7 +173,14 @@ export function UpdateActions(self: ModuleInstance): void {
 					disableAutoExpression: true,
 				},
 				{ ...portDropdown('dst', 'Destination :', dst), isVisibleExpression: '!$(options:useSelected)' },
-				{ type: 'dropdown', id: 'mode', label: 'Lock mode :', default: '0', choices: LOCK_MODES },
+				{
+					type: 'dropdown',
+					id: 'mode',
+					label: 'Lock mode :',
+					default: '0',
+					choices: LOCK_MODES,
+					disableAutoExpression: true,
+				},
 			],
 			callback: (action) =>
 				self.lockDestination(action.options.dst, action.options.mode, action.options.useSelected === true),

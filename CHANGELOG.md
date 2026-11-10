@@ -10,6 +10,7 @@ All notable changes to this module are documented here. The format follows
 ### Bug Fixes
 
 - **fix(actions):** the selected-route Cut and Stage, and auto-route, now warn "Cannot route yet: the router has not reported its level" when that is the reason nothing was sent, instead of asking for a selection that has already been made.
+- **fix(actions):** the mode of **Set auto-route mode** and the **Auto-route mode** feedback, the lock mode of **Lock/Unlock a destination**, and the format, reference and switching point of **Preset video format** can no longer be switched to an expression. They only accepted internal codes the list never showed, and a valid but wrong code could change the video format. A button already using an expression on one of these must be set again from the list.
 
 ## [3.0.0] - 2026-11-09
 
