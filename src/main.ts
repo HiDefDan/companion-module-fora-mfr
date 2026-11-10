@@ -216,8 +216,12 @@ export default class ModuleInstance extends InstanceBase<ModuleSchema> {
 	/** Cut or preset the selected source to the selected destination */
 	routeSelection(mode: 'cut' | 'preset'): void {
 		const { selectedDst, selectedSrc } = this.state
-		if (this.state.level === undefined || selectedDst === undefined || selectedSrc === undefined) {
+		if (selectedDst === undefined || selectedSrc === undefined) {
 			this.log('warn', 'Select a destination and a source before switching')
+			return
+		}
+		if (this.state.level === undefined) {
+			this.log('warn', 'Cannot route yet: the router has not reported its level')
 			return
 		}
 		if (mode === 'cut' && this.#cutRefused(selectedDst)) return

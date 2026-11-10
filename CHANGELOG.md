@@ -5,6 +5,12 @@ All notable changes to this module are documented here. The format follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html), and entries are grouped by the
 [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/) type of the change.
 
+## [Unreleased]
+
+### Bug Fixes
+
+- **fix(actions):** the selected-route Cut and Stage, and auto-route, now warn "Cannot route yet: the router has not reported its level" when that is the reason nothing was sent, instead of asking for a selection that has already been made.
+
 ## [3.0.0] - 2026-11-09
 
 ### ⚠ BREAKING CHANGES

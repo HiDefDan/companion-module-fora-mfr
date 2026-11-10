@@ -358,6 +358,32 @@ describe('ModuleInstance against a simulated router', () => {
 			}
 		}
 
+		it('blames the unread router, not the selection, when a pair is selected before the level is known', () => {
+			module.selectDestination('3')
+			module.selectSource('6')
+			const sent = socket.sent.length
+
+			module.routeSelection('cut')
+			module.routeSelection('preset')
+
+			expect(log('warn')).toEqual([
+				'Cannot route yet: the router has not reported its level',
+				'Cannot route yet: the router has not reported its level',
+			])
+			expect(socket.sent.length).toBe(sent)
+			expect(module.state.selectedDst).toBe(2)
+			expect(module.state.selectedSrc).toBe(5)
+		})
+
+		it('asks for a selection when one is missing, once the level is known', () => {
+			startUp()
+			module.selectDestination('3')
+
+			module.routeSelection('cut')
+
+			expect(log('warn')).toEqual(['Select a destination and a source before switching'])
+		})
+
 		it('logs routes changed elsewhere, but not its own or those from the first read', () => {
 			startUp()
 			socket.receive('S:00,1\r\n')
